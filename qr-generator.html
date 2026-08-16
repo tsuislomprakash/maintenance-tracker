@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>84 Control Panel QR Stickers</title>
+  <title>84 Control Panel QR Stickers (Admin Only)</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
@@ -52,11 +52,19 @@
   </style>
 </head>
 <body>
+  <!-- Strict Admin Security Guard: Direct URL access is blocked for non-admins -->
+  <script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true' || sessionStorage.getItem('userRole') !== 'admin') {
+      alert("Access Denied: QR Generator tool is strictly restricted to Administrator.");
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+    }
+  </script>
+
   <div class="container">
     <header>
       <div class="header-left">
         <h2>Dedicated QR Generator (84 Equipment Network)</h2>
-        <small style="color:#607d8b;">Automatic Drop Gates (14) | Manual Drop Gates (15) | Signals (9) | AVA (31) | Flickering Lights (15)</small>
+        <small style="color:#607d8b;">Admin Security Access: Automatic Drop Gates (14) | Manual Drop Gates (15) | Signals (9) | AVA (31) | Flickering Lights (15)</small>
       </div>
       <div>
         <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>

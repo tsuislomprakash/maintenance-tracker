@@ -45,10 +45,10 @@
         <a href="history.html" class="nav-btn" style="background:#37474f;">Open All Records</a>
       </div>
 
-      <!-- 4. QR Generator Card -->
-      <div class="card">
-        <h3>QR Generator for Panels</h3>
-        <p>Generate & Print dedicated QR code stickers for all 84 control panels.</p>
+      <!-- 4. QR Generator Card (HIDDEN BY DEFAULT - ONLY VISIBLE TO ADMIN) -->
+      <div class="card" id="adminQrCard" style="display: none; border: 2px solid #00796b; background: #e0f2f1;">
+        <h3 style="color:#00796b;">QR Generator for Panels</h3>
+        <p>Admin Tool: Generate & Print dedicated QR code stickers for all 84 control panels.</p>
         <a href="qr-generator.html" class="nav-btn" style="background:#00796b;">Generate 84 QR Stickers</a>
       </div>
     </div>
@@ -76,14 +76,23 @@
 
     function renderUserControls() {
       const authBox = document.getElementById('authHeader');
+      const qrCard = document.getElementById('adminQrCard');
       const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
       const user = sessionStorage.getItem('activeUser');
       const role = sessionStorage.getItem('userRole');
 
       if (isLoggedIn) {
         let adminAction = "";
+        
+        // Show QR Generator Card ONLY if logged in as Admin
         if (role === 'admin') {
-          adminAction = `<a href="planner.html" class="nav-btn" style="background:#e65100; margin-right:4px;">+ Assign Plan</a>`;
+          qrCard.style.display = "block";
+          adminAction = `
+            <a href="planner.html" class="nav-btn" style="background:#e65100; margin-right:4px;">+ Assign Plan</a>
+            <a href="qr-generator.html" class="nav-btn" style="background:#00796b; margin-right:4px;">QR Tool</a>
+          `;
+        } else {
+          qrCard.style.display = "none";
         }
 
         authBox.innerHTML = `
@@ -93,6 +102,7 @@
           <button onclick="logout()" class="btn-logout">Logout</button>
         `;
       } else {
+        qrCard.style.display = "none";
         authBox.innerHTML = `
           <a href="login.html" class="nav-btn">Login</a>
         `;
