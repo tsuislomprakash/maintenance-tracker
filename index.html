@@ -23,6 +23,7 @@
     </header>
 
     <div class="card-grid">
+      <!-- 1. Daily Plan Card -->
       <div class="card" style="border: 2px solid #e65100; background: #fff8e1;">
         <span id="planCountBadge" class="counter-badge">0</span>
         <h3 style="color:#e65100;">Daily Maintenance Plan</h3>
@@ -30,18 +31,28 @@
         <a href="planner.html" class="nav-btn" style="background:#e65100;">Open Maintenance Plan</a>
       </div>
 
+      <!-- 2. Team Duty Attendance Card (NEW) -->
+      <div class="card" style="border: 2px solid #2e7d32; background: #e8f5e9;">
+        <h3 style="color:#2e7d32;">Team Duty Attendance</h3>
+        <p>Log daily shift attendance, duty areas, view history & export Excel roster report.</p>
+        <a href="attendance.html" class="nav-btn" style="background:#2e7d32;">Open Attendance Portal</a>
+      </div>
+
+      <!-- 3. Form Fill Card -->
       <div class="card">
         <h3>Fill Maintenance Log</h3>
         <p>Log a 15-day routine or breakdown service with GPS audit stamping.</p>
         <a href="form.html" class="nav-btn">Open Maintenance Form</a>
       </div>
 
+      <!-- 4. History Card -->
       <div class="card">
         <h3>View Maintenance History</h3>
         <p>Master records, search system ID, Excel download & overdue audit alerts.</p>
         <a href="history.html" class="nav-btn" style="background:#37474f;">Open All Records</a>
       </div>
 
+      <!-- 5. QR Generator Card (Admin Only) -->
       <div class="card" id="adminQrCard" style="display: none; border: 2px solid #00796b; background: #e0f2f1;">
         <h3 style="color:#00796b;">QR Generator for Panels</h3>
         <p>Admin Tool: Generate & Print dedicated QR code stickers for all 84 control panels.</p>
@@ -155,7 +166,6 @@
           }
         });
 
-        // 1. Doughnut Chart: Ratio
         new Chart(document.getElementById('typeRatioChart'), {
           type: 'doughnut',
           data: {
@@ -167,7 +177,6 @@
           }
         });
 
-        // 2. Bar Chart: Breakdown Distribution
         new Chart(document.getElementById('categoryChart'), {
           type: 'bar',
           data: {

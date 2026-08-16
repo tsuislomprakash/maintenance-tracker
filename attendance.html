@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maintenance Team Attendance Portal</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase & Excel Engine -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- Security Guard: Must be Logged In -->
+  <script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+    }
+  </script>
+
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h2>Field Team Attendance Management</h2>
+        <small style="color:#607d8b;">Daily Duty Roster & Attendance Tracking across Field Units</small>
+      </div>
+
+      <div class="user-controls">
+        <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
+        <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+        <button onclick="switchAccount()" class="btn-switch">Switch</button>
+        <button onclick="logout()" class="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <!-- Attendance Submission Box -->
+    <div style="background:#e8f5e9; border:1px solid #c8e6c9; padding:20px; border-radius:8px; margin-bottom:25px;">
+      <h3 style="color:#2e7d32; margin-bottom:15px;">+ Mark Daily Duty Attendance</h3>
+      <form id="attendanceForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="attDate">Duty Date *</label>
+            <input type="date" id="attDate" required>
+          </div>
+
+          <div class="form-group">
+            <label for="attShift">Duty Shift *</label>
+            <select id="attShift" required>
+              <option value="General Shift (09:00 - 17:30)">General Shift (09:00 - 17:30)</option>
+              <option value="Morning Shift (06:00 - 14:00)">Morning Shift (06:00 - 14:00)</option>
+              <option value="Evening Shift (14:00 - 22:00)">Evening Shift (14:00 - 22:00)</option>
+              <option value="Night Shift (22:00 - 06:00)">Night Shift (22:00 - 06:00)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="memberName">Technician / Member Name *</label>
+            <input type="text" id="memberName" placeholder="Enter Full Name" required>
+          </div>
+
+          <div class="form-group">
+            <label for="employeeId">Emp ID / Contractor ID</label>
+            <input type="text" id="employeeId" placeholder="e.g. EMP-1042">
+          </div>
+
+          <div class="form-group">
+            <label for="attStatus">Attendance Status *</label>
+            <select id="attStatus" required>
+              <option value="Present (On Duty)">Present (On Duty)</option>
+              <option value="Absent">Absent</option>
+              <option value="On Leave">On Leave</option>
+              <option value="Half Day">Half Day</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="assignedArea">Assigned Duty Area / Gate</label>
+            <input type="text" id="assignedArea" placeholder="e.g. Gate 4, Traffic Junction, Central Hub">
+          </div>
+
+          <div class="form-group full-width">
+            <label for="attRemarks">Work Description / Remarks</label>
+            <textarea id="attRemarks" rows="2" placeholder="e.g. Assigned to routine gate lubrication and signal panel inspection"></textarea>
+          </div>
+        </div>
+
+        <button type="submit" id="attSubmitBtn" class="submit-btn" style="width:100%; margin-top:10px;">Submit & Geostamp Attendance</button>
+      </form>
+    </div>
+
+    <!-- Attendance History & Search Filter Toolbar -->
+    <h3 style="margin-bottom:15px; color:#1a237e;">Team Attendance Records</h3>
+    <form id="filterForm" onsubmit="event.preventDefault(); applyFilter();" style="background:#eceff1; padding:12px; border-radius:6px; margin-bottom:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <label for="filterInput" style="margin-bottom:0;"><strong>Search Log:</strong></label>
+      <input type="text" id="filterInput" placeholder="Search by Name, Date, Shift, Area" oninput="applyFilter()" style="max-width:280px; padding:8px;">
+      <button type="button" onclick="resetFilter()" class="nav-btn" style="background:#546e7a; padding:8px 14px;">Reset</button>
+      <button type="button" onclick="exportAttendanceExcel()" class="btn-action btn-excel" style="padding:8px 16px; margin-left:auto;">📊 Export Attendance (.xlsx)</button>
+    </form>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Duty Date</th>
+            <th>Member Name</th>
+            <th>Emp ID</th>
+            <th>Shift</th>
+            <th>Duty Status</th>
+            <th>Assigned Area</th>
+            <th>GPS Spot</th>
+            <th>Logged By</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody id="attTableBody">
+          <tr><td colspan="10" style="text-align:center; padding:20px; font-weight:bold;">Fetching attendance records...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
+      authDomain: "maintenance-tracker-9232f.firebaseapp.com",
+      projectId: "maintenance-tracker-9232f",
+      storageBucket: "maintenance-tracker-9232f.firebasestorage.app",
+      messagingSenderId: "1028949858608",
+      appId: "1:1028949858608:web:ca651824fedab23cb890f5",
+      measurementId: "G-R0560TMM98"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let allAttendance = [];
+    let filteredAttendance = [];
+
+    window.onload = function() {
+      const user = sessionStorage.getItem('activeUser') || 'Supervisor';
+      const role = sessionStorage.getItem('userRole') || 'Supervisor';
+      document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
+
+      document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
+      fetchAttendanceLogs();
+    };
+
+    function getGPSCoordinates() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({ lat: "N/A", lng: "N/A", mapUrl: "" });
+        } else {
+          navigator.geolocation.getCurrentPosition(
+            pos => {
+              const lat = pos.coords.latitude.toFixed(6);
+              const lng = pos.coords.longitude.toFixed(6);
+              resolve({ lat, lng, mapUrl: `https://www.google.com/maps?q=${lat},${lng}` });
+            },
+            () => resolve({ lat: "Permission Denied", lng: "N/A", mapUrl: "" }),
+            { timeout: 7000 }
+          );
+        }
+      });
+    }
+
+    document.getElementById('attendanceForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('attSubmitBtn');
+      btn.innerText = "Stamping GPS & Submitting...";
+      btn.disabled = true;
+
+      const gps = await getGPSCoordinates();
+
+      const record = {
+        dutyDate: document.getElementById('attDate').value,
+        shift: document.getElementById('attShift').value,
+        memberName: document.getElementById('memberName').value.trim(),
+        employeeId: document.getElementById('employeeId').value.trim() || "N/A",
+        status: document.getElementById('attStatus').value,
+        assignedArea: document.getElementById('assignedArea').value.trim() || "General Maintenance",
+        remarks: document.getElementById('attRemarks').value.trim() || "None",
+        gpsLat: gps.lat,
+        gpsLng: gps.lng,
+        gpsMapUrl: gps.mapUrl,
+        submittedBy: sessionStorage.getItem('activeUser') || 'Supervisor',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        await db.collection("team_attendance").add(record);
+        alert("✅ Attendance Logged Successfully!");
+        document.getElementById('memberName').value = "";
+        document.getElementById('employeeId').value = "";
+        document.getElementById('assignedArea').value = "";
+        document.getElementById('attRemarks').value = "";
+        btn.innerText = "Submit & Geostamp Attendance";
+        btn.disabled = false;
+        fetchAttendanceLogs();
+      } catch (err) {
+        alert("Error saving attendance: " + err.message);
+        btn.innerText = "Submit & Geostamp Attendance";
+        btn.disabled = false;
+      }
+    });
+
+    async function fetchAttendanceLogs() {
+      try {
+        const snapshot = await db.collection("team_attendance").get();
+        allAttendance = [];
+        snapshot.forEach(doc => {
+          allAttendance.push({ id: doc.id, ...doc.data() });
+        });
+
+        allAttendance.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        renderTable(allAttendance);
+      } catch (err) {
+        document.getElementById('attTableBody').innerHTML = `<tr><td colspan="10" style="color:red; text-align:center;">Failed to load attendance logs: ${err.message}</td></tr>`;
+      }
+    }
+
+    function renderTable(data) {
+      filteredAttendance = data;
+      const tableBody = document.getElementById('attTableBody');
+      tableBody.innerHTML = "";
+
+      if (data.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#888;">No attendance records found.</td></tr>`;
+        return;
+      }
+
+      data.forEach((item, index) => {
+        let statusBadge = `<span class="status-badge badge-ok">${item.status}</span>`;
+        if (item.status === "Absent") {
+          statusBadge = `<span class="status-badge badge-critical">❌ Absent</span>`;
+        } else if (item.status.includes("Leave") || item.status.includes("Half")) {
+          statusBadge = `<span class="status-badge badge-due-soon">⚠️ ${item.status}</span>`;
+        }
+
+        const gpsBtn = item.gpsMapUrl 
+          ? `<a href="${item.gpsMapUrl}" target="_blank" class="btn-action btn-view" style="background:#00796b; font-size:11px;">📍 View Map</a>`
+          : `<span style="color:#9e9e9e; font-size:11px;">No GPS</span>`;
+
+        const row = `
+          <tr>
+            <td>${index + 1}</td>
+            <td><strong>${item.dutyDate}</strong></td>
+            <td><strong>${item.memberName}</strong></td>
+            <td>${item.employeeId}</td>
+            <td><small>${item.shift}</small></td>
+            <td>${statusBadge}</td>
+            <td>${item.assignedArea}</td>
+            <td>${gpsBtn}</td>
+            <td><small>${item.submittedBy}</small></td>
+            <td><small>${item.remarks}</small></td>
+          </tr>
+        `;
+        tableBody.insertAdjacentHTML('beforeend', row);
+      });
+    }
+
+    function applyFilter() {
+      const query = document.getElementById('filterInput').value.trim().toUpperCase();
+      const filtered = allAttendance.filter(item => 
+        (item.memberName || "").toUpperCase().includes(query) ||
+        (item.dutyDate || "").toUpperCase().includes(query) ||
+        (item.shift || "").toUpperCase().includes(query) ||
+        (item.assignedArea || "").toUpperCase().includes(query) ||
+        (item.employeeId || "").toUpperCase().includes(query)
+      );
+      renderTable(filtered);
+    }
+
+    function resetFilter() {
+      document.getElementById('filterInput').value = "";
+      renderTable(allAttendance);
+    }
+
+    function exportAttendanceExcel() {
+      if (filteredAttendance.length === 0) {
+        alert("No attendance records to export.");
+        return;
+      }
+
+      const exportData = filteredAttendance.map((r, i) => ({
+        "Sl No": i + 1,
+        "Duty Date": r.dutyDate,
+        "Member Name": r.memberName,
+        "Employee ID": r.employeeId,
+        "Duty Shift": r.shift,
+        "Attendance Status": r.status,
+        "Assigned Duty Area": r.assignedArea,
+        "Remarks": r.remarks,
+        "GPS Latitude": r.gpsLat || "N/A",
+        "GPS Longitude": r.gpsLng || "N/A",
+        "Logged By Supervisor": r.submittedBy,
+        "Logged Timestamp": r.createdAt
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Duty_Attendance");
+
+      XLSX.writeFile(workbook, `Team_Attendance_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    function switchAccount() {
+      sessionStorage.clear();
+      window.location.href = `login.html?redirect=${encodeURIComponent(window.location.href)}`;
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
