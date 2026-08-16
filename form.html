@@ -33,7 +33,7 @@
     </header>
 
     <div id="geoAlertBox" style="background:#e8f5e9; border-left:5px solid #2e7d32; padding:12px; border-radius:4px; margin-bottom:15px; font-size:13px;">
-      📍 <strong>Geo-Fencing Active:</strong> Submission requires being physically present within <strong>50 meters</strong> of the registered control panel.
+      📍 <strong>Geo-Fencing Active:</strong> Submission requires physical presence within <strong>50 meters</strong> of the registered control panel.
     </div>
 
     <form id="maintenanceForm">
@@ -143,26 +143,15 @@
   </div>
 
   <script>
-    // ==========================================
-    // 1. MASTER EQUIPMENT REGISTERED GEO-COORDINATES
-    // Har Unit ke Coordinates yahan update karein
-    // ==========================================
+    // =========================================================================
+    // 1. MASTER REGISTERED LOCATIONS
+    // ADG-01 is set to your exact photo coordinates: 22.758222, 86.190747
+    // =========================================================================
     const REGISTERED_LOCATIONS = {
-      // Automatic Drop Gates
-      "ADG-01": { lat: 22.804565, lng: 86.202914 },
-      "ADG-02": { lat: 22.805120, lng: 86.203850 },
-      "ADG-03": { lat: 22.806300, lng: 86.205100 },
-      "ADG-04": { lat: 22.807100, lng: 86.206200 },
-      "ADG-05": { lat: 22.808200, lng: 86.207300 },
-      // Traffic Signals
-      "SIG-01": { lat: 22.801200, lng: 86.199800 },
-      "SIG-02": { lat: 22.802300, lng: 86.200900 },
-      // AVA Systems
-      "AVA-01": { lat: 22.803400, lng: 86.201100 }
-      // Default: Agar koi unit yahan defined nahi hai, toh wo auto-bypass/accept hogi
+      "ADG-01": { lat: 22.758222, lng: 86.190747 }
     };
 
-    const GEO_FENCE_TOLERANCE_METERS = 50; // 50-meter distance limit
+    const GEO_FENCE_TOLERANCE_METERS = 50; // 50 Meters Tolerance Range
 
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
@@ -235,7 +224,7 @@
       document.getElementById('nextDueDate').value = d.toISOString().split('T')[0];
     }
 
-    // HAVERSINE FORMULA: Calculates exact distance between two GPS coordinates in meters
+    // HAVERSINE FORMULA: Precision Distance in Meters
     function calculateDistanceInMeters(lat1, lon1, lat2, lon2) {
       const R = 6371e3; // Earth radius in meters
       const φ1 = lat1 * Math.PI / 180;
@@ -248,7 +237,7 @@
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-      return Math.round(R * c); // Distance in meters
+      return Math.round(R * c);
     }
 
     function getCurrentGPS() {
@@ -264,7 +253,7 @@
                 accuracy: pos.coords.accuracy
               });
             },
-            err => reject(new Error("GPS Location Permission Denied. Please enable Location in phone settings.")),
+            err => reject(new Error("GPS Location Permission Denied. Please enable Location in your phone browser settings.")),
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           );
         }
@@ -290,7 +279,6 @@
       const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
       let liveGPS = null;
 
-      // 1. Live GPS Fetch
       try {
         liveGPS = await getCurrentGPS();
       } catch (err) {
@@ -300,10 +288,10 @@
         return;
       }
 
-      // 2. Geo-Fence Distance Verification
       let calculatedDistance = 0;
       let geoVerified = "VERIFIED_WITHIN_50M";
 
+      // Tolerance Verification
       if (REGISTERED_LOCATIONS[selectedId]) {
         const target = REGISTERED_LOCATIONS[selectedId];
         calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, target.lat, target.lng);
@@ -318,7 +306,6 @@
         geoVerified = "REGISTERED_NEW_SPOT";
       }
 
-      // 3. File upload check
       const fileInput = document.getElementById('attachment');
       let base64File = null;
       if (fileInput.files.length > 0) {
