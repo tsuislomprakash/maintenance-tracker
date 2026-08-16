@@ -23,6 +23,9 @@
 
       <div class="user-controls">
         <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
+        <!-- Dashboard Navigation -->
+        <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+        <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
         <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
         <button onclick="logout()" class="btn-logout">Logout</button>
       </div>
@@ -31,10 +34,9 @@
     <form id="maintenanceForm">
       <div class="form-grid">
         
-        <!-- System ID field (Readonly if opened via Dedicated QR) -->
         <div class="form-group">
           <label for="systemId">System ID *</label>
-          <input type="text" id="systemId" required style="font-weight:bold; background:#e8eaf6;">
+          <input type="text" id="systemId" placeholder="e.g. ADG-01, SIG-01" required style="font-weight:bold; background:#e8eaf6;">
         </div>
 
         <div class="form-group">
@@ -102,7 +104,7 @@
 
         <div class="form-group full-width">
           <label for="issue">Issue (if any) *</label>
-          <textarea id="issue" rows="2" placeholder="Enter 'Nil' or 'None' if normal preventive routine" required></textarea>
+          <textarea id="issue" rows="2" placeholder="Enter 'Nil' or 'None' if preventive routine" required></textarea>
         </div>
 
         <div class="form-group full-width">
@@ -139,10 +141,8 @@
         const sysField = document.getElementById('systemId');
         sysField.value = dedicatedId.toUpperCase();
         sysField.readOnly = true;
-        document.getElementById('lockedNotice').innerText = `[Locked to Dedicated Unit: ${dedicatedId.toUpperCase()}]`;
+        document.getElementById('lockedNotice').innerText = `[Locked to Unit: ${dedicatedId.toUpperCase()}]`;
         
-        // Auto-select dropdown type based on prefix
-        const prefix = dedicatedId.substring(0, 3).toUpperCase();
         if (dedicatedId.includes("ADG")) document.getElementById('systemType').value = "Automatic Drop Gate";
         else if (dedicatedId.includes("MDG")) document.getElementById('systemType').value = "Manual Drop Gate";
         else if (dedicatedId.includes("SIG")) document.getElementById('systemType').value = "Traffic Signal";

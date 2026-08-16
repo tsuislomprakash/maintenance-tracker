@@ -50,7 +50,7 @@
       }
 
       document.getElementById('panelIdDisplay').innerText = `System ID: ${currentSystemId}`;
-      document.getElementById('panelDetailsDisplay').innerText = `Connected to field maintenance network. All logs are locked to this unit.`;
+      document.getElementById('panelDetailsDisplay').innerText = `Connected to field maintenance network. All actions locked to this unit.`;
       renderUserControls();
     };
 
@@ -62,11 +62,15 @@
       if (isLoggedIn) {
         authBox.innerHTML = `
           <span class="user-badge-info">👤 <strong>${user}</strong></span>
+          <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
           <button onclick="switchAccount()" class="btn-switch">Switch</button>
           <button onclick="logout()" class="btn-logout">Logout</button>
         `;
       } else {
-        authBox.innerHTML = `<a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>`;
+        authBox.innerHTML = `
+          <a href="index.html" class="nav-btn" style="background:#546e7a; margin-right:5px;">Dashboard</a>
+          <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>
+        `;
       }
     }
 

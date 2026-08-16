@@ -64,11 +64,11 @@
     </header>
 
     <div class="no-print" style="background: #e8eaf6; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-      <label for="baseUrl"><strong>Live GitHub Pages URL:</strong></label>
-      <input type="text" id="baseUrl" placeholder="https://your-user.github.io/maintenance-tracker" style="margin-top:5px;">
+      <label for="baseUrl"><strong>Live Website URL:</strong></label>
+      <input type="text" id="baseUrl" placeholder="https://your-user.github.io/repo-name" style="margin-top:5px;">
       <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap;">
         <button onclick="generateAll84QRs()" class="submit-btn" style="margin-top:0; padding:8px 16px;">Regenerate All 84 Stickers</button>
-        <button onclick="window.print()" class="nav-btn" style="background:#2e7d32;">🖨️ Print All Stickers (3-per-row)</button>
+        <button onclick="window.print()" class="nav-btn" style="background:#2e7d32;">🖨️ Print All Stickers</button>
       </div>
     </div>
 
@@ -76,26 +76,20 @@
   </div>
 
   <script>
-    // Master Array for 84 Unique Equipment Panels
     function buildMaster84List() {
       const list = [];
-      // 1. Automatic Drop Gates (14)
       for (let i = 1; i <= 14; i++) {
         list.push({ id: `ADG-${i.toString().padStart(2, '0')}`, name: `Auto Drop Gate #${i}` });
       }
-      // 2. Manual Drop Gates (15)
       for (let i = 1; i <= 15; i++) {
         list.push({ id: `MDG-${i.toString().padStart(2, '0')}`, name: `Manual Drop Gate #${i}` });
       }
-      // 3. Traffic Signals (9)
       for (let i = 1; i <= 9; i++) {
         list.push({ id: `SIG-${i.toString().padStart(2, '0')}`, name: `Traffic Signal #${i}` });
       }
-      // 4. AVA Systems (31)
       for (let i = 1; i <= 31; i++) {
         list.push({ id: `AVA-${i.toString().padStart(2, '0')}`, name: `AVA System #${i}` });
       }
-      // 5. Flickering Lights (15)
       for (let i = 1; i <= 15; i++) {
         list.push({ id: `FL-${i.toString().padStart(2, '0')}`, name: `Flickering Light #${i}` });
       }
