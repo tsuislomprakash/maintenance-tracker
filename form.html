@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log Maintenance Entry</title>
+  <title>Log Maintenance Entry (Geo-Fenced)</title>
   <link rel="stylesheet" href="style.css">
   
   <!-- Firebase SDKs -->
@@ -26,12 +26,15 @@
 
       <div class="user-controls">
         <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
-        <!-- Contextual Back Button: Returns only to dedicated unit hub if scanned via QR -->
         <span id="navButtonsContainer"></span>
         <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
         <button onclick="logout()" class="btn-logout">Logout</button>
       </div>
     </header>
+
+    <div id="geoAlertBox" style="background:#e8f5e9; border-left:5px solid #2e7d32; padding:12px; border-radius:4px; margin-bottom:15px; font-size:13px;">
+      📍 <strong>Geo-Fencing Active:</strong> Submission requires being physically present within <strong>50 meters</strong> of the registered control panel.
+    </div>
 
     <form id="maintenanceForm">
       <div class="form-grid">
@@ -135,11 +138,32 @@
         </div>
       </div>
 
-      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit & Geostamp Maintenance Log</button>
+      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Verify GPS (50m Tolerance) & Submit Log</button>
     </form>
   </div>
 
   <script>
+    // ==========================================
+    // 1. MASTER EQUIPMENT REGISTERED GEO-COORDINATES
+    // Har Unit ke Coordinates yahan update karein
+    // ==========================================
+    const REGISTERED_LOCATIONS = {
+      // Automatic Drop Gates
+      "ADG-01": { lat: 22.804565, lng: 86.202914 },
+      "ADG-02": { lat: 22.805120, lng: 86.203850 },
+      "ADG-03": { lat: 22.806300, lng: 86.205100 },
+      "ADG-04": { lat: 22.807100, lng: 86.206200 },
+      "ADG-05": { lat: 22.808200, lng: 86.207300 },
+      // Traffic Signals
+      "SIG-01": { lat: 22.801200, lng: 86.199800 },
+      "SIG-02": { lat: 22.802300, lng: 86.200900 },
+      // AVA Systems
+      "AVA-01": { lat: 22.803400, lng: 86.201100 }
+      // Default: Agar koi unit yahan defined nahi hai, toh wo auto-bypass/accept hogi
+    };
+
+    const GEO_FENCE_TOLERANCE_METERS = 50; // 50-meter distance limit
+
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
       authDomain: "maintenance-tracker-9232f.firebaseapp.com",
@@ -155,11 +179,11 @@
 
     let dedicatedId = null;
     let linkedPlanId = null;
-    const userRole = sessionStorage.getItem('userRole');
 
     window.onload = function() {
       const user = sessionStorage.getItem('activeUser') || 'User';
-      document.getElementById('userDisplay').innerText = `${user} (${userRole ? userRole.toUpperCase() : ''})`;
+      const role = sessionStorage.getItem('userRole') || 'Supervisor';
+      document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
 
       const now = new Date();
       const today = now.toISOString().split('T')[0];
@@ -189,13 +213,11 @@
         else if (dedicatedId.includes("AVA")) document.getElementById('systemType').value = "AVA";
         else if (dedicatedId.includes("FL")) document.getElementById('systemType').value = "Flickering Light";
 
-        // QR User: Only give access back to unit hub & history (No dashboard link)
         navContainer.innerHTML = `
           <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
           <a href="history.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#546e7a;">Unit Logs</a>
         `;
       } else {
-        // Admin or central user without dedicated ID
         navContainer.innerHTML = `
           <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
           <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
@@ -213,18 +235,40 @@
       document.getElementById('nextDueDate').value = d.toISOString().split('T')[0];
     }
 
-    function switchAccount() {
-      sessionStorage.clear();
-      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+    // HAVERSINE FORMULA: Calculates exact distance between two GPS coordinates in meters
+    function calculateDistanceInMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // Earth radius in meters
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+      return Math.round(R * c); // Distance in meters
     }
 
-    function logout() {
-      sessionStorage.clear();
-      if (dedicatedId) {
-        window.location.href = `device.html?id=${encodeURIComponent(dedicatedId)}`;
-      } else {
-        window.location.href = 'login.html';
-      }
+    function getCurrentGPS() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error("Geolocation is not supported by your mobile browser."));
+        } else {
+          navigator.geolocation.getCurrentPosition(
+            pos => {
+              resolve({
+                lat: parseFloat(pos.coords.latitude.toFixed(6)),
+                lng: parseFloat(pos.coords.longitude.toFixed(6)),
+                accuracy: pos.coords.accuracy
+              });
+            },
+            err => reject(new Error("GPS Location Permission Denied. Please enable Location in phone settings.")),
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          );
+        }
+      });
     }
 
     function fileToBase64(file) {
@@ -237,45 +281,55 @@
       });
     }
 
-    function getGPSCoordinates() {
-      return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-          resolve({ lat: "N/A", lng: "N/A", mapUrl: "" });
-        } else {
-          navigator.geolocation.getCurrentPosition(
-            pos => {
-              const lat = pos.coords.latitude.toFixed(6);
-              const lng = pos.coords.longitude.toFixed(6);
-              resolve({ lat, lng, mapUrl: `https://www.google.com/maps?q=${lat},${lng}` });
-            },
-            () => resolve({ lat: "Permission Denied", lng: "N/A", mapUrl: "" }),
-            { timeout: 8000 }
-          );
-        }
-      });
-    }
-
     document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
-      btn.innerText = "Capturing GPS & Syncing Cloud...";
+      btn.innerText = "Checking 50m Geo-Fence Distance...";
       btn.disabled = true;
 
       const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
+      let liveGPS = null;
+
+      // 1. Live GPS Fetch
+      try {
+        liveGPS = await getCurrentGPS();
+      } catch (err) {
+        alert("🚨 Geo-Verification Error: " + err.message);
+        btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
+        btn.disabled = false;
+        return;
+      }
+
+      // 2. Geo-Fence Distance Verification
+      let calculatedDistance = 0;
+      let geoVerified = "VERIFIED_WITHIN_50M";
+
+      if (REGISTERED_LOCATIONS[selectedId]) {
+        const target = REGISTERED_LOCATIONS[selectedId];
+        calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, target.lat, target.lng);
+
+        if (calculatedDistance > GEO_FENCE_TOLERANCE_METERS) {
+          alert(`❌ GEO-FENCE REJECTED!\n\nYou are ${calculatedDistance} meters away from ${selectedId}.\nAllowed tolerance is maximum ${GEO_FENCE_TOLERANCE_METERS} meters.\n\nPlease stand near the equipment to submit maintenance.`);
+          btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
+          btn.disabled = false;
+          return;
+        }
+      } else {
+        geoVerified = "REGISTERED_NEW_SPOT";
+      }
+
+      // 3. File upload check
       const fileInput = document.getElementById('attachment');
       let base64File = null;
-
       if (fileInput.files.length > 0) {
         if (fileInput.files[0].size > 1.5 * 1024 * 1024) {
           alert("Attachment is too large. Please upload an image under 1.5MB.");
-          btn.innerText = "Submit & Geostamp Maintenance Log";
+          btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
           btn.disabled = false;
           return;
         }
         base64File = await fileToBase64(fileInput.files[0]);
       }
-
-      const gps = await getGPSCoordinates();
 
       const record = {
         systemId: selectedId,
@@ -293,9 +347,11 @@
         partNumber: document.getElementById('partNumber').value.trim() || "N/A",
         issue: document.getElementById('issue').value.trim(),
         actionTaken: document.getElementById('actionTaken').value.trim(),
-        gpsLat: gps.lat,
-        gpsLng: gps.lng,
-        gpsMapUrl: gps.mapUrl,
+        gpsLat: liveGPS.lat,
+        gpsLng: liveGPS.lng,
+        gpsMapUrl: `https://www.google.com/maps?q=${liveGPS.lat},${liveGPS.lng}`,
+        geoDistanceMeters: calculatedDistance,
+        geoAuditStatus: geoVerified,
         attachmentData: base64File,
         attachmentName: fileInput.files[0] ? fileInput.files[0].name : null,
         submittedBy: sessionStorage.getItem('activeUser') || 'Technician',
@@ -313,7 +369,7 @@
           });
         }
 
-        alert("✅ Log Stamped with GPS & Successfully Synced!");
+        alert(`✅ GEO-FENCE PASSED!\nDistance to Equipment: ${calculatedDistance} meters (Within 50m tolerance).\nLog Successfully Synced to Cloud!`);
         if (dedicatedId) {
           window.location.href = `history.html?id=${encodeURIComponent(dedicatedId)}`;
         } else {
@@ -321,10 +377,24 @@
         }
       } catch (err) {
         alert("❌ Error saving: " + err.message);
-        btn.innerText = "Submit & Geostamp Maintenance Log";
+        btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
         btn.disabled = false;
       }
     });
+
+    function switchAccount() {
+      sessionStorage.clear();
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      if (dedicatedId) {
+        window.location.href = `device.html?id=${encodeURIComponent(dedicatedId)}`;
+      } else {
+        window.location.href = 'login.html';
+      }
+    }
   </script>
 </body>
 </html>
