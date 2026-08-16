@@ -6,9 +6,10 @@
   <title>Maintenance History & Monitoring</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase & SheetJS (Excel Engine) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -27,12 +28,15 @@
       <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
     </div>
 
-    <!-- Search / Filter Box Accessible to Everyone -->
+    <!-- Search & Export Toolbar -->
     <form id="filterForm" onsubmit="executeSearch(event)" style="background:#e8eaf6; padding:15px; border-radius:6px; margin-bottom:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <label for="filterInput" style="margin-bottom:0;"><strong>Search System ID:</strong></label>
-      <input type="text" id="filterInput" placeholder="e.g. ADG-01, SIG-01, AVA, Gate" style="max-width:280px; padding:9px;">
-      <button type="submit" class="submit-btn" style="margin:0; padding:9px 18px; font-size:13px;">Submit / Search</button>
+      <input type="text" id="filterInput" placeholder="e.g. ADG-01, SIG-01, AVA, Gate" style="max-width:260px; padding:9px;">
+      <button type="submit" class="submit-btn" style="margin:0; padding:9px 18px; font-size:13px;">Search</button>
       <button type="button" onclick="resetSearch()" class="nav-btn" style="background:#546e7a; padding:9px 14px;">Show All</button>
+      
+      <!-- NEW: Excel Download Engine Button -->
+      <button type="button" onclick="exportToExcel()" class="btn-action btn-excel" style="padding:9px 16px; margin-left:auto;">📊 Export to Excel (.xlsx)</button>
     </form>
 
     <div class="table-container">
@@ -47,14 +51,15 @@
             <th>Done Date & Time</th>
             <th>Next Due (15d)</th>
             <th>Alert Status</th>
-            <th>Issue / Action</th>
+            <th>Spares & Part #</th>
+            <th>GPS Spot</th>
             <th>Attachment</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="12" style="text-align:center; padding:20px; font-weight:bold;">Connecting to Cloud Database...</td></tr>
+          <tr><td colspan="13" style="text-align:center; padding:20px; font-weight:bold;">Connecting to Cloud Database...</td></tr>
         </tbody>
       </table>
     </div>
@@ -98,13 +103,18 @@
         </div>
 
         <div class="form-group">
-          <label>Time of Maintenance</label>
-          <input type="time" id="editMaintTime">
+          <label>Next Due Date (Auto 15 Days)</label>
+          <input type="date" id="editDueDate" required style="background:#f1f8e9; font-weight:bold;">
         </div>
 
         <div class="form-group">
-          <label>Next Due Date (Auto 15 Days)</label>
-          <input type="date" id="editDueDate" required style="background:#f1f8e9; font-weight:bold;">
+          <label>Parts Replaced</label>
+          <input type="text" id="editPartReplaced">
+        </div>
+
+        <div class="form-group">
+          <label>Part / Serial Number</label>
+          <input type="text" id="editPartNumber">
         </div>
 
         <div class="form-group">
@@ -145,6 +155,7 @@
     const db = firebase.firestore();
 
     let allCloudRecords = [];
+    let displayedRecords = [];
     let dedicatedId = null;
 
     window.onload = function() {
@@ -153,10 +164,10 @@
 
       if (dedicatedId) {
         document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
-        document.getElementById('subHeading').innerText = `Live timeline for ${dedicatedId.toUpperCase()} (Public View)`;
+        document.getElementById('subHeading').innerText = `Live timeline for ${dedicatedId.toUpperCase()}`;
       } else {
         document.getElementById('pageHeading').innerText = `Master Maintenance History`;
-        document.getElementById('subHeading').innerText = `Cloud-connected records across all devices (Public View)`;
+        document.getElementById('subHeading').innerText = `Cloud-connected records across 84 Field Units`;
       }
 
       renderUserControls();
@@ -183,7 +194,6 @@
       } else {
         authBox.innerHTML = `
           <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
-          <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
           <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login for Entry/Edit</a>
         `;
       }
@@ -200,7 +210,7 @@
         allCloudRecords.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         displayRecords("");
       } catch (err) {
-        document.getElementById('tableBody').innerHTML = `<tr><td colspan="12" style="color:red; text-align:center; font-weight:bold;">Failed to load cloud data: ${err.message}</td></tr>`;
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="13" style="color:red; text-align:center;">Failed to load cloud data: ${err.message}</td></tr>`;
       }
     }
 
@@ -235,13 +245,15 @@
         });
       }
 
+      displayedRecords = records;
+
       let overdue = 0;
       let upcoming = 0;
       const today = new Date();
       today.setHours(0,0,0,0);
 
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs found.</td></tr>`;
         document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
         document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
         document.getElementById('totalCount').innerText = `Total Records: 0`;
@@ -269,6 +281,10 @@
           ? `<button class="btn-action btn-view" onclick="viewAttachment('${item.docId}')">📎 View</button>`
           : `<span style="color:#9e9e9e; font-size:12px;">No File</span>`;
 
+        const gpsBtn = item.gpsMapUrl 
+          ? `<a href="${item.gpsMapUrl}" target="_blank" class="btn-action btn-view" style="background:#00796b;">📍 Map</a>`
+          : `<span style="color:#9e9e9e; font-size:11px;">No GPS</span>`;
+
         let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">View Only</span>`;
         if (isAdmin) {
           actionBtns = `
@@ -287,7 +303,8 @@
             <td>${item.maintenanceDate}<br><small style="color:#607d8b;">🕒 ${item.maintenanceTime || '--:--'}</small></td>
             <td>${item.nextDueDate}</td>
             <td>${alertBadge}</td>
-            <td><small><strong>I:</strong> ${item.issue}<br><strong>A:</strong> ${item.actionTaken}</small></td>
+            <td><small><strong>P:</strong> ${item.partReplaced || 'None'}<br><strong>PN:</strong> ${item.partNumber || 'N/A'}</small></td>
+            <td>${gpsBtn}</td>
             <td>${attachmentBtn}</td>
             <td><strong>${item.status}</strong></td>
             <td>${actionBtns}</td>
@@ -299,6 +316,42 @@
       document.getElementById('overdueCount').innerText = `Critical Overdue: ${overdue}`;
       document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): ${upcoming}`;
       document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
+    }
+
+    // EXCEL EXPORT ENGINE
+    function exportToExcel() {
+      if (displayedRecords.length === 0) {
+        alert("No records available to export.");
+        return;
+      }
+
+      const exportData = displayedRecords.map((r, i) => ({
+        "Sl No": i + 1,
+        "System ID": r.systemId,
+        "Equipment Type": r.systemType,
+        "Department": r.department,
+        "Location": r.location,
+        "Supervisor Name": r.supervisor,
+        "Maintenance Date": r.maintenanceDate,
+        "Maintenance Time": r.maintenanceTime || "",
+        "Next Due Date": r.nextDueDate,
+        "Maintenance Type": r.maintenanceType,
+        "Priority": r.priority,
+        "Status": r.status,
+        "Parts Replaced": r.partReplaced || "None",
+        "Part Number / Serial": r.partNumber || "N/A",
+        "Issue / Directive": r.issue,
+        "Action Taken": r.actionTaken,
+        "GPS Latitude": r.gpsLat || "N/A",
+        "GPS Longitude": r.gpsLng || "N/A",
+        "Submission Timestamp": r.createdAt
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Maintenance_Report");
+
+      XLSX.writeFile(workbook, `Maintenance_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function viewAttachment(docId) {
@@ -328,8 +381,9 @@
       document.getElementById('editLocation').value = rec.location || "";
       document.getElementById('editSupervisor').value = rec.supervisor || "";
       document.getElementById('editMaintDate').value = rec.maintenanceDate || "";
-      document.getElementById('editMaintTime').value = rec.maintenanceTime || "";
       document.getElementById('editDueDate').value = rec.nextDueDate || "";
+      document.getElementById('editPartReplaced').value = rec.partReplaced || "";
+      document.getElementById('editPartNumber').value = rec.partNumber || "";
       document.getElementById('editIssue').value = rec.issue || "";
       document.getElementById('editAction').value = rec.actionTaken || "";
       document.getElementById('editStatus').value = rec.status || "Completed";
@@ -353,8 +407,9 @@
           location: document.getElementById('editLocation').value.trim(),
           supervisor: document.getElementById('editSupervisor').value.trim(),
           maintenanceDate: document.getElementById('editMaintDate').value,
-          maintenanceTime: document.getElementById('editMaintTime').value,
           nextDueDate: document.getElementById('editDueDate').value,
+          partReplaced: document.getElementById('editPartReplaced').value.trim() || "None",
+          partNumber: document.getElementById('editPartNumber').value.trim() || "N/A",
           issue: document.getElementById('editIssue').value.trim(),
           actionTaken: document.getElementById('editAction').value.trim(),
           status: document.getElementById('editStatus').value

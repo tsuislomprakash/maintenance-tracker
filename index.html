@@ -6,9 +6,10 @@
   <title>Central Maintenance Management Dashboard</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase SDKs & Chart.js -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="container">
@@ -18,12 +19,10 @@
         <small style="color: #607d8b;">Monitoring Network: <strong>84 Dedicated Field Units</strong> (15-Day Routine Cycle)</small>
       </div>
 
-      <!-- Top Right User & Admin Controls -->
       <div id="authHeader" class="user-controls"></div>
     </header>
 
     <div class="card-grid">
-      <!-- 1. Daily Plan Card with Live Notification Badge -->
       <div class="card" style="border: 2px solid #e65100; background: #fff8e1;">
         <span id="planCountBadge" class="counter-badge">0</span>
         <h3 style="color:#e65100;">Daily Maintenance Plan</h3>
@@ -31,31 +30,40 @@
         <a href="planner.html" class="nav-btn" style="background:#e65100;">Open Maintenance Plan</a>
       </div>
 
-      <!-- 2. Form Fill Card -->
       <div class="card">
         <h3>Fill Maintenance Log</h3>
-        <p>Log a 15-day routine or breakdown service. Authorized access required.</p>
+        <p>Log a 15-day routine or breakdown service with GPS audit stamping.</p>
         <a href="form.html" class="nav-btn">Open Maintenance Form</a>
       </div>
 
-      <!-- 3. History Card -->
       <div class="card">
         <h3>View Maintenance History</h3>
-        <p>Master system records, search system ID, overdue critical alerts & audits.</p>
+        <p>Master records, search system ID, Excel download & overdue audit alerts.</p>
         <a href="history.html" class="nav-btn" style="background:#37474f;">Open All Records</a>
       </div>
 
-      <!-- 4. QR Generator Card (HIDDEN BY DEFAULT - ONLY VISIBLE TO ADMIN) -->
       <div class="card" id="adminQrCard" style="display: none; border: 2px solid #00796b; background: #e0f2f1;">
         <h3 style="color:#00796b;">QR Generator for Panels</h3>
         <p>Admin Tool: Generate & Print dedicated QR code stickers for all 84 control panels.</p>
         <a href="qr-generator.html" class="nav-btn" style="background:#00796b;">Generate 84 QR Stickers</a>
       </div>
     </div>
+
+    <!-- Live System Reliability & Breakdown Analytics -->
+    <h3 style="color:#1a237e; border-bottom:2px solid #eceff1; padding-bottom:8px; margin-top:20px;">System Health & Reliability Analytics</h3>
+    <div class="analytics-grid">
+      <div class="chart-card">
+        <h4 style="margin-bottom:12px; color:#37474f;">Maintenance Activity Ratio (Preventive vs Breakdown)</h4>
+        <canvas id="typeRatioChart" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4 style="margin-bottom:12px; color:#37474f;">Equipment Breakdown Distribution (By Category)</h4>
+        <canvas id="categoryChart" height="200"></canvas>
+      </div>
+    </div>
   </div>
 
   <script>
-    // --- LIVE FIREBASE CONFIGURATION ---
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
       authDomain: "maintenance-tracker-9232f.firebaseapp.com",
@@ -72,6 +80,7 @@
     window.onload = function() {
       renderUserControls();
       listenActivePlans();
+      renderAnalyticsCharts();
     };
 
     function renderUserControls() {
@@ -83,8 +92,6 @@
 
       if (isLoggedIn) {
         let adminAction = "";
-        
-        // Show QR Generator Card ONLY if logged in as Admin
         if (role === 'admin') {
           qrCard.style.display = "block";
           adminAction = `
@@ -103,13 +110,10 @@
         `;
       } else {
         qrCard.style.display = "none";
-        authBox.innerHTML = `
-          <a href="login.html" class="nav-btn">Login</a>
-        `;
+        authBox.innerHTML = `<a href="login.html" class="nav-btn">Login</a>`;
       }
     }
 
-    // Realtime Listener for Pending Tasks
     function listenActivePlans() {
       db.collection("maintenance_plans").where("status", "==", "PENDING").onSnapshot(snapshot => {
         const count = snapshot.size;
@@ -120,9 +124,68 @@
         } else {
           badge.style.display = "none";
         }
-      }, err => {
-        console.log("Plan listen notice: ", err.message);
       });
+    }
+
+    async function renderAnalyticsCharts() {
+      try {
+        const snapshot = await db.collection("maintenance_records").get();
+        let preventiveCount = 0;
+        let breakdownCount = 0;
+
+        const categoryBreakdown = {
+          "Auto Drop Gate": 0,
+          "Manual Drop Gate": 0,
+          "Traffic Signal": 0,
+          "AVA": 0,
+          "Flickering Light": 0
+        };
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.maintenanceType === "Breakdown") {
+            breakdownCount++;
+            if (data.systemType?.includes("Auto Drop Gate")) categoryBreakdown["Auto Drop Gate"]++;
+            else if (data.systemType?.includes("Manual Drop Gate")) categoryBreakdown["Manual Drop Gate"]++;
+            else if (data.systemType?.includes("Traffic Signal")) categoryBreakdown["Traffic Signal"]++;
+            else if (data.systemType?.includes("AVA")) categoryBreakdown["AVA"]++;
+            else if (data.systemType?.includes("Flickering Light")) categoryBreakdown["Flickering Light"]++;
+          } else {
+            preventiveCount++;
+          }
+        });
+
+        // 1. Doughnut Chart: Ratio
+        new Chart(document.getElementById('typeRatioChart'), {
+          type: 'doughnut',
+          data: {
+            labels: ['Preventive (Routine)', 'Breakdown'],
+            datasets: [{
+              data: [preventiveCount || 1, breakdownCount],
+              backgroundColor: ['#2e7d32', '#d32f2f']
+            }]
+          }
+        });
+
+        // 2. Bar Chart: Breakdown Distribution
+        new Chart(document.getElementById('categoryChart'), {
+          type: 'bar',
+          data: {
+            labels: Object.keys(categoryBreakdown),
+            datasets: [{
+              label: 'Breakdowns Logged',
+              data: Object.values(categoryBreakdown),
+              backgroundColor: '#e65100'
+            }]
+          },
+          options: {
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+          }
+        });
+
+      } catch (e) {
+        console.log("Analytics Error:", e.message);
+      }
     }
 
     function switchAccount() {

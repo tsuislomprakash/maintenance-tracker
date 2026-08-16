@@ -11,7 +11,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <!-- Security Guard: Must be Logged In to Fill Form -->
   <script>
     if (sessionStorage.getItem('isLoggedIn') !== 'true') {
       window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
@@ -83,7 +82,6 @@
           <input type="date" id="maintenanceDate" required onchange="calculateNextDue(this.value)">
         </div>
 
-        <!-- NEW: Maintenance Time Field -->
         <div class="form-group">
           <label for="maintenanceTime">Time of Maintenance *</label>
           <input type="time" id="maintenanceTime" required>
@@ -112,9 +110,20 @@
           </select>
         </div>
 
+        <!-- NEW: Spare Parts & Part Number Replacement Details -->
+        <div class="form-group">
+          <label for="partReplaced">Parts Replaced (if any)</label>
+          <input type="text" id="partReplaced" placeholder="e.g. Flashing LED Bulb, Relay, Gear Oil">
+        </div>
+
+        <div class="form-group">
+          <label for="partNumber">Part / Serial Number (if any)</label>
+          <input type="text" id="partNumber" placeholder="e.g. PN-LED-4401, REL-24V-8A">
+        </div>
+
         <div class="form-group full-width">
-          <label for="issue">Issue (if any) / Task Checked *</label>
-          <textarea id="issue" rows="2" placeholder="Enter 'Nil' or 'None' if preventive routine" required></textarea>
+          <label for="issue">Issue / Directive Checked *</label>
+          <textarea id="issue" rows="2" placeholder="Enter 'Nil' or 'None' if normal preventive routine" required></textarea>
         </div>
 
         <div class="form-group full-width">
@@ -128,7 +137,7 @@
         </div>
       </div>
 
-      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit & Close Maintenance Entry</button>
+      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit & Geostamp Maintenance Log</button>
     </form>
   </div>
 
@@ -181,12 +190,8 @@
         else if (dedicatedId.includes("FL")) document.getElementById('systemType').value = "Flickering Light";
       }
 
-      if (preIssue) {
-        document.getElementById('issue').value = decodeURIComponent(preIssue);
-      }
-      if (preType) {
-        document.getElementById('maintenanceType').value = preType;
-      }
+      if (preIssue) document.getElementById('issue').value = decodeURIComponent(preIssue);
+      if (preType) document.getElementById('maintenanceType').value = preType;
     };
 
     function calculateNextDue(dateString) {
@@ -216,10 +221,29 @@
       });
     }
 
+    // Geolocation Audit Capture
+    function getGPSCoordinates() {
+      return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+          resolve({ lat: "N/A", lng: "N/A", mapUrl: "" });
+        } else {
+          navigator.geolocation.getCurrentPosition(
+            pos => {
+              const lat = pos.coords.latitude.toFixed(6);
+              const lng = pos.coords.longitude.toFixed(6);
+              resolve({ lat, lng, mapUrl: `https://www.google.com/maps?q=${lat},${lng}` });
+            },
+            () => resolve({ lat: "Permission Denied", lng: "N/A", mapUrl: "" }),
+            { timeout: 8000 }
+          );
+        }
+      });
+    }
+
     document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
-      btn.innerText = "Syncing to Cloud Database...";
+      btn.innerText = "Capturing GPS & Syncing Cloud...";
       btn.disabled = true;
 
       const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
@@ -229,12 +253,14 @@
       if (fileInput.files.length > 0) {
         if (fileInput.files[0].size > 1.5 * 1024 * 1024) {
           alert("Attachment is too large. Please upload an image under 1.5MB.");
-          btn.innerText = "Submit & Close Maintenance Entry";
+          btn.innerText = "Submit & Geostamp Maintenance Log";
           btn.disabled = false;
           return;
         }
         base64File = await fileToBase64(fileInput.files[0]);
       }
+
+      const gps = await getGPSCoordinates();
 
       const record = {
         systemId: selectedId,
@@ -248,8 +274,13 @@
         nextDueDate: document.getElementById('nextDueDate').value,
         priority: document.getElementById('priority').value,
         status: document.getElementById('status').value,
+        partReplaced: document.getElementById('partReplaced').value.trim() || "None",
+        partNumber: document.getElementById('partNumber').value.trim() || "N/A",
         issue: document.getElementById('issue').value.trim(),
         actionTaken: document.getElementById('actionTaken').value.trim(),
+        gpsLat: gps.lat,
+        gpsLng: gps.lng,
+        gpsMapUrl: gps.mapUrl,
         attachmentData: base64File,
         attachmentName: fileInput.files[0] ? fileInput.files[0].name : null,
         submittedBy: sessionStorage.getItem('activeUser') || 'Technician',
@@ -259,7 +290,6 @@
       try {
         await db.collection("maintenance_records").add(record);
 
-        // If this was an assigned plan, auto-close it from the plan board
         if (linkedPlanId) {
           await db.collection("maintenance_plans").doc(linkedPlanId).update({
             status: "COMPLETED",
@@ -268,15 +298,15 @@
           });
         }
 
-        alert("✅ Maintenance Entry Logged & Plan Marked as Completed!");
+        alert("✅ Log Stamped with GPS & Successfully Synced!");
         if (dedicatedId) {
           window.location.href = `history.html?id=${dedicatedId}`;
         } else {
           window.location.href = "history.html";
         }
       } catch (err) {
-        alert("❌ Error saving to cloud database: " + err.message);
-        btn.innerText = "Submit & Close Maintenance Entry";
+        alert("❌ Error saving: " + err.message);
+        btn.innerText = "Submit & Geostamp Maintenance Log";
         btn.disabled = false;
       }
     });

@@ -15,7 +15,7 @@
     <header>
       <div class="header-left">
         <h2>Maintenance Schedule & Work Orders</h2>
-        <small style="color:#607d8b;">Admin Daily/Weekly Directives across all 84 Field Units</small>
+        <small style="color:#607d8b;">Admin Directives across 84 Field Units</small>
       </div>
 
       <div class="user-controls">
@@ -26,7 +26,7 @@
 
     <!-- Admin Task Creator Form (Visible ONLY to Admin) -->
     <div id="adminCreateSection" style="display:none; background:#fff3e0; border:1px solid #ffe0b2; padding:20px; border-radius:8px; margin-bottom:25px;">
-      <h3 style="color:#e65100; margin-bottom:12px;">+ Assign New Maintenance Plan / Directive</h3>
+      <h3 style="color:#e65100; margin-bottom:12px;">+ Assign New Maintenance Plan</h3>
       <form id="planForm">
         <div class="form-grid">
           <div class="form-group">
@@ -65,7 +65,7 @@
 
           <div class="form-group full-width">
             <label for="planInstructions">Inspection Instructions / Issue to Check *</label>
-            <textarea id="planInstructions" rows="2" placeholder="e.g. Check boom arm motor alignment, inspect flashing LED circuit, lubricate gear assembly" required></textarea>
+            <textarea id="planInstructions" rows="2" placeholder="e.g. Check boom arm motor, inspect flashing LED circuit, check cables" required></textarea>
           </div>
         </div>
 
@@ -90,7 +90,7 @@
           </tr>
         </thead>
         <tbody id="planTableBody">
-          <tr><td colspan="8" style="text-align:center; padding:20px;">Fetching schedule plans...</td></tr>
+          <tr><td colspan="8" style="text-align:center; padding:20px; font-weight:bold;">Fetching schedule plans...</td></tr>
         </tbody>
       </table>
     </div>
@@ -141,7 +141,6 @@
       });
     }
 
-    // Submit Plan by Admin
     document.getElementById('planForm')?.addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('planSubmitBtn');
@@ -167,7 +166,13 @@
 
       try {
         await db.collection("maintenance_plans").add(planData);
-        alert("✅ Maintenance Plan successfully broadcasted!");
+        alert("✅ Maintenance Plan broadcasted successfully!");
+        
+        // Optional instant WhatsApp Alert dispatch
+        if (confirm("Send WhatsApp alert notification to Field Duty Group?")) {
+          sendWhatsAppPlanAlert(planData);
+        }
+
         document.getElementById('planInstructions').value = "";
         btn.innerText = "Broadcast Maintenance Plan";
         btn.disabled = false;
@@ -177,7 +182,11 @@
       }
     });
 
-    // Realtime Load Plans
+    function sendWhatsAppPlanAlert(plan) {
+      const msg = encodeURIComponent(`🚨 *MAINTENANCE DIRECTIVE ASSIGNED*\n\n*Unit ID:* ${plan.systemId} (${plan.systemType})\n*Target:* ${plan.targetDate} at ${plan.targetTime}\n*Type:* ${plan.maintenanceType}\n*Priority:* ${plan.priority}\n*Instructions:* ${plan.instructions}\n\n_Please execute maintenance on time._`);
+      window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+    }
+
     function loadActivePlans() {
       db.collection("maintenance_plans").where("status", "==", "PENDING").onSnapshot(snapshot => {
         const tableBody = document.getElementById('planTableBody');
@@ -202,6 +211,8 @@
 
           let deleteBtn = isAdmin ? `<button onclick="cancelPlan('${docId}')" class="btn-action btn-delete" style="font-size:11px;">Cancel Plan</button>` : '';
 
+          const whatsappShareBtn = `<button onclick="sendWhatsAppPlanAlert(${JSON.stringify(plan).replace(/"/g, '&quot;')})" class="btn-action btn-whatsapp" style="font-size:11px;">📲 WhatsApp</button>`;
+
           const row = `
             <tr>
               <td>${index++}</td>
@@ -213,6 +224,7 @@
               <td>${plan.instructions}</td>
               <td>
                 <button onclick="executePlan('${plan.systemId}', '${docId}', '${encodeURIComponent(plan.instructions)}', '${plan.maintenanceType}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Execute & Log</button>
+                ${whatsappShareBtn}
                 ${deleteBtn}
               </td>
             </tr>
