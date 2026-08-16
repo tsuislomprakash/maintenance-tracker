@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fill Maintenance Form</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Guard: Redirect to login if unauthenticated -->
+  <script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+    }
+  </script>
+
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h2>Log Maintenance Record</h2>
+      </div>
+
+      <!-- Top Right Corner Controls -->
+      <div class="user-controls">
+        <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
+        <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
+        <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
+        <button onclick="logout()" class="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <form id="maintenanceForm">
+      <div class="form-grid">
+        
+        <div class="form-group">
+          <label for="systemId">System ID *</label>
+          <select id="systemId" required>
+            <option value="">-- Select Pre-defined ID --</option>
+            <option value="TS-DG-01">TS-DG-01</option>
+            <option value="TS-DG-02">TS-DG-02</option>
+            <option value="TS-SIG-01">TS-SIG-01</option>
+            <option value="TS-SIG-02">TS-SIG-02</option>
+            <option value="TS-AVA-01">TS-AVA-01</option>
+            <option value="TS-FL-01">TS-FL-01</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="department">Department *</label>
+          <input type="text" id="department" required>
+        </div>
+
+        <div class="form-group">
+          <label for="location">Location *</label>
+          <input type="text" id="location" required>
+        </div>
+
+        <div class="form-group">
+          <label for="supervisor">Supervisor Name *</label>
+          <input type="text" id="supervisor" required>
+        </div>
+
+        <div class="form-group">
+          <label for="systemType">System Type *</label>
+          <select id="systemType" required>
+            <option value="">-- Select Type --</option>
+            <option value="Drop Gate">Drop Gate</option>
+            <option value="Traffic Signal">Traffic Signal</option>
+            <option value="AVA">AVA</option>
+            <option value="Flickering Light">Flickering Light</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="maintenanceType">Type of Maintenance *</label>
+          <select id="maintenanceType" required>
+            <option value="">-- Select Maintenance --</option>
+            <option value="Preventive">Preventive</option>
+            <option value="Breakdown">Breakdown</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="maintenanceDate">Date of Maintenance *</label>
+          <input type="date" id="maintenanceDate" required onchange="calculateNextDue(this.value)">
+        </div>
+
+        <div class="form-group">
+          <label for="nextDueDate">Next Due Date (Auto 15 Days) *</label>
+          <input type="date" id="nextDueDate" required style="background:#f1f8e9; font-weight:bold;">
+        </div>
+
+        <div class="form-group">
+          <label for="priority">Priority *</label>
+          <select id="priority" required>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="status">Status *</label>
+          <select id="status" required>
+            <option value="Completed">Completed</option>
+            <option value="Pending">Pending</option>
+          </select>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="issue">Issue (if any) *</label>
+          <textarea id="issue" rows="2" placeholder="Write 'None' if preventive" required></textarea>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="actionTaken">Action Taken *</label>
+          <textarea id="actionTaken" rows="2" required></textarea>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="attachment">Attachment (Photo / Document)</label>
+          <input type="file" id="attachment" accept="image/*,application/pdf">
+        </div>
+      </div>
+
+      <button type="submit" class="submit-btn" style="width:100%;">Submit Maintenance Entry</button>
+    </form>
+  </div>
+
+  <script>
+    const validSystemIDs = ["TS-DG-01", "TS-DG-02", "TS-SIG-01", "TS-SIG-02", "TS-AVA-01", "TS-FL-01"];
+
+    window.onload = function() {
+      const user = sessionStorage.getItem('activeUser') || 'User';
+      const role = sessionStorage.getItem('userRole') || 'Member';
+      document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
+
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('maintenanceDate').value = today;
+      calculateNextDue(today);
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const scannedId = urlParams.get('id');
+      if (scannedId && validSystemIDs.includes(scannedId.toUpperCase())) {
+        document.getElementById('systemId').value = scannedId.toUpperCase();
+      }
+    };
+
+    function calculateNextDue(dateString) {
+      if (!dateString) return;
+      const d = new Date(dateString);
+      d.setDate(d.getDate() + 15);
+      document.getElementById('nextDueDate').value = d.toISOString().split('T')[0];
+    }
+
+    function switchAccount() {
+      sessionStorage.clear();
+      window.location.href = 'login.html';
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) { resolve(null); return; }
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+
+    document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const selectedId = document.getElementById('systemId').value;
+      const fileInput = document.getElementById('attachment');
+      let base64File = null;
+
+      if (fileInput.files.length > 0) {
+        if (fileInput.files[0].size > 2 * 1024 * 1024) {
+          alert("File size is greater than 2MB. Please upload a smaller image/file.");
+          return;
+        }
+        base64File = await fileToBase64(fileInput.files[0]);
+      }
+
+      const record = {
+        systemId: selectedId,
+        department: document.getElementById('department').value.trim(),
+        location: document.getElementById('location').value.trim(),
+        supervisor: document.getElementById('supervisor').value.trim(),
+        systemType: document.getElementById('systemType').value,
+        maintenanceType: document.getElementById('maintenanceType').value,
+        maintenanceDate: document.getElementById('maintenanceDate').value,
+        nextDueDate: document.getElementById('nextDueDate').value,
+        priority: document.getElementById('priority').value,
+        status: document.getElementById('status').value,
+        issue: document.getElementById('issue').value.trim(),
+        actionTaken: document.getElementById('actionTaken').value.trim(),
+        attachmentData: base64File,
+        attachmentName: fileInput.files[0] ? fileInput.files[0].name : null,
+        submittedBy: sessionStorage.getItem('activeUser') || 'Technician',
+        createdAt: new Date().toISOString()
+      };
+
+      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      records.unshift(record);
+      localStorage.setItem('maintenanceRecords', JSON.stringify(records));
+
+      alert("✅ Maintenance Entry Successfully Submitted!");
+      window.location.href = "history.html";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maintenance Management Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h1>Maintenance Management Portal</h1>
+        <small style="color: #607d8b;">Routine Cycle: <strong>Every 15 Days</strong></small>
+      </div>
+
+      <!-- Top Right Corner Controls -->
+      <div id="authHeader" class="user-controls">
+        <!-- Managed dynamically by JS -->
+      </div>
+    </header>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3>Fill Maintenance Form</h3>
+        <p>Log a new 15-day preventive or breakdown maintenance record.</p>
+        <a href="form.html" class="nav-btn">Open Maintenance Form</a>
+      </div>
+
+      <div class="card">
+        <h3>View Maintenance History</h3>
+        <p>Monitor logs, inspect attachments, manage alerts, edit & delete records.</p>
+        <a href="history.html" class="nav-btn" style="background:#37474f;">View Maintenance History</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      renderUserControls();
+    };
+
+    function renderUserControls() {
+      const authBox = document.getElementById('authHeader');
+      const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
+      const user = sessionStorage.getItem('activeUser');
+      const role = sessionStorage.getItem('userRole');
+
+      if (isLoggedIn) {
+        authBox.innerHTML = `
+          <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
+          <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
+          <button onclick="logout()" class="btn-logout">Logout</button>
+        `;
+      } else {
+        authBox.innerHTML = `
+          <a href="login.html" class="nav-btn">Login</a>
+        `;
+      }
+    }
+
+    function switchAccount() {
+      sessionStorage.clear();
+      window.location.href = 'login.html';
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      renderUserControls();
+      alert("Logged out successfully.");
+    }
+  </script>
+</body>
+</html>

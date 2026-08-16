@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="auth-container">
+    <h2 style="margin-bottom: 10px;">Maintenance Auth</h2>
+    <p style="color: #607d8b; font-size: 14px; margin-bottom: 20px;">Enter credentials to proceed</p>
+    
+    <div id="errorMessage" class="error-message">Invalid Login ID or Password!</div>
+
+    <form id="loginForm">
+      <div class="form-group">
+        <label for="loginId">Login ID</label>
+        <input type="text" id="loginId" placeholder="ADMIN or SUPERVISOR" required autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter Password" required>
+      </div>
+
+      <button type="submit" class="submit-btn" style="width: 100%;">Login & Continue</button>
+    </form>
+    
+    <div style="margin-top: 20px;">
+      <a href="index.html" style="color: #1a237e; font-size: 13px; text-decoration: none;">← Back to Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    const AUTH_CREDENTIALS = [
+      { user: "ADMIN", pass: "ADMIN@123", role: "admin" },
+      { user: "SUPERVISOR", pass: "MAINT@2026", role: "supervisor" }
+    ];
+
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const enteredUser = document.getElementById('loginId').value.trim().toUpperCase();
+      const enteredPass = document.getElementById('password').value;
+
+      const matched = AUTH_CREDENTIALS.find(
+        cred => cred.user === enteredUser && cred.pass === enteredPass
+      );
+
+      if (matched) {
+        sessionStorage.setItem('isLoggedIn', 'true');
+        sessionStorage.setItem('activeUser', matched.user);
+        sessionStorage.setItem('userRole', matched.role);
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUrl = urlParams.get('redirect') || 'form.html';
+        window.location.href = redirectUrl;
+      } else {
+        document.getElementById('errorMessage').style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

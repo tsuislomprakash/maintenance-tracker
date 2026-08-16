@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maintenance History & Monitoring</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h2>Maintenance History & Tracker</h2>
+      </div>
+
+      <!-- Top Right Corner Controls -->
+      <div id="authHeader" class="user-controls">
+        <!-- Managed dynamically by JS -->
+      </div>
+    </header>
+
+    <div class="alert-summary">
+      <div class="alert-card badge-critical" id="overdueCount">Critical Overdue: 0</div>
+      <div class="alert-card badge-due-soon" id="upcomingCount">Due Soon (Next 3 Days): 0</div>
+      <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>System ID</th>
+            <th>Type</th>
+            <th>Location</th>
+            <th>Supervisor</th>
+            <th>Done Date</th>
+            <th>Next Due (15d)</th>
+            <th>Alert Status</th>
+            <th>Issue / Action</th>
+            <th>Attachment</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <!-- Dynamically Loaded -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Attachment View Modal -->
+  <div id="attachmentModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal('attachmentModal')">&times;</span>
+      <h3 style="margin-bottom: 15px;">Attachment Preview</h3>
+      <div id="attachmentContainer" style="text-align: center;"></div>
+    </div>
+  </div>
+
+  <!-- Edit Record Modal (Admin Only) -->
+  <div id="editModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal('editModal')">&times;</span>
+      <h3 style="margin-bottom: 15px;">Edit Maintenance Record</h3>
+      <form id="editForm">
+        <input type="hidden" id="editIndex">
+
+        <div class="form-group">
+          <label>System ID</label>
+          <input type="text" id="editSystemId" readonly style="background:#eceff1; cursor:not-allowed;">
+        </div>
+
+        <div class="form-group">
+          <label>Location</label>
+          <input type="text" id="editLocation" required>
+        </div>
+        
+        <div class="form-group">
+          <label>Supervisor Name</label>
+          <input type="text" id="editSupervisor" required>
+        </div>
+
+        <div class="form-group">
+          <label>Date of Maintenance</label>
+          <input type="date" id="editMaintDate" required onchange="calculateEditDue(this.value)">
+        </div>
+
+        <div class="form-group">
+          <label>Next Due Date (Auto 15 Days)</label>
+          <input type="date" id="editDueDate" required style="background:#f1f8e9; font-weight:bold;">
+        </div>
+
+        <div class="form-group">
+          <label>Issue</label>
+          <textarea id="editIssue" rows="2" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Action Taken</label>
+          <textarea id="editAction" rows="2" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Status</label>
+          <select id="editStatus" required>
+            <option value="Completed">Completed</option>
+            <option value="Pending">Pending</option>
+          </select>
+        </div>
+
+        <button type="submit" class="submit-btn" style="width:100%;">Save Changes</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      renderUserControls();
+      loadHistory();
+    };
+
+    function renderUserControls() {
+      const authBox = document.getElementById('authHeader');
+      const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
+      const user = sessionStorage.getItem('activeUser');
+      const role = sessionStorage.getItem('userRole');
+
+      if (isLoggedIn) {
+        authBox.innerHTML = `
+          <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
+          <a href="form.html" class="nav-btn">+ New Entry</a>
+          <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
+          <button onclick="logout()" class="btn-logout">Logout</button>
+        `;
+      } else {
+        authBox.innerHTML = `
+          <a href="login.html" class="nav-btn">Login</a>
+          <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
+        `;
+      }
+    }
+
+    function switchAccount() {
+      sessionStorage.clear();
+      window.location.href = 'login.html';
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      renderUserControls();
+      loadHistory();
+      alert("Logged out successfully.");
+    }
+
+    function loadHistory() {
+      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      const tableBody = document.getElementById('tableBody');
+      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+      tableBody.innerHTML = "";
+
+      let overdue = 0;
+      let upcoming = 0;
+      const today = new Date();
+      today.setHours(0,0,0,0);
+
+      if (records.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px; color:#888;">No maintenance records logged yet.</td></tr>`;
+        document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
+        document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
+        document.getElementById('totalCount').innerText = `Total Records: 0`;
+        return;
+      }
+
+      records.forEach((item, index) => {
+        const dueDate = new Date(item.nextDueDate);
+        dueDate.setHours(0,0,0,0);
+        const timeDiff = dueDate - today;
+        const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+        let alertBadge = "";
+        if (daysDiff < 0) {
+          alertBadge = `<span class="status-badge badge-critical">🚨 Overdue (${Math.abs(daysDiff)}d)</span>`;
+          overdue++;
+        } else if (daysDiff <= 3) {
+          alertBadge = `<span class="status-badge badge-due-soon">⚠️ Due in ${daysDiff}d</span>`;
+          upcoming++;
+        } else {
+          alertBadge = `<span class="status-badge badge-ok">✅ OK (${daysDiff}d left)</span>`;
+        }
+
+        const attachmentBtn = item.attachmentData 
+          ? `<button class="btn-action btn-view" onclick="viewAttachment(${index})">📎 View</button>`
+          : `<span style="color:#9e9e9e; font-size:12px;">No File</span>`;
+
+        let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">View Only</span>`;
+        if (isAdmin) {
+          actionBtns = `
+            <button class="btn-action btn-edit" onclick="openEditModal(${index})">Edit</button>
+            <button class="btn-action btn-delete" onclick="deleteRecord(${index})">Delete</button>
+          `;
+        }
+
+        const row = `
+          <tr>
+            <td>${index + 1}</td>
+            <td><strong>${item.systemId}</strong></td>
+            <td>${item.systemType}<br><small style="color:#546e7a;">(${item.maintenanceType})</small></td>
+            <td>${item.location}</td>
+            <td>${item.supervisor}</td>
+            <td>${item.maintenanceDate}</td>
+            <td>${item.nextDueDate}</td>
+            <td>${alertBadge}</td>
+            <td><small><strong>I:</strong> ${item.issue}<br><strong>A:</strong> ${item.actionTaken}</small></td>
+            <td>${attachmentBtn}</td>
+            <td><strong>${item.status}</strong></td>
+            <td>${actionBtns}</td>
+          </tr>
+        `;
+        tableBody.insertAdjacentHTML('beforeend', row);
+      });
+
+      document.getElementById('overdueCount').innerText = `Critical Overdue: ${overdue}`;
+      document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): ${upcoming}`;
+      document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
+    }
+
+    function viewAttachment(index) {
+      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      const rec = records[index];
+      if (!rec || !rec.attachmentData) return;
+
+      const container = document.getElementById('attachmentContainer');
+      container.innerHTML = "";
+
+      if (rec.attachmentData.startsWith("data:image/")) {
+        container.innerHTML = `<img src="${rec.attachmentData}" style="max-width:100%; max-height:450px; border-radius:6px;" alt="Attachment">`;
+      } else if (rec.attachmentData.startsWith("data:application/pdf")) {
+        container.innerHTML = `<iframe src="${rec.attachmentData}" style="width:100%; height:450px; border:none;"></iframe>`;
+      } else {
+        container.innerHTML = `<a href="${rec.attachmentData}" download="${rec.attachmentName || 'attachment'}" class="nav-btn">Download File</a>`;
+      }
+
+      document.getElementById('attachmentModal').style.display = 'block';
+    }
+
+    function openEditModal(index) {
+      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      const rec = records[index];
+      if (!rec) return;
+
+      document.getElementById('editIndex').value = index;
+      document.getElementById('editSystemId').value = rec.systemId || "";
+      document.getElementById('editLocation').value = rec.location || "";
+      document.getElementById('editSupervisor').value = rec.supervisor || "";
+      document.getElementById('editMaintDate').value = rec.maintenanceDate || "";
+      document.getElementById('editDueDate').value = rec.nextDueDate || "";
+      document.getElementById('editIssue').value = rec.issue || "";
+      document.getElementById('editAction').value = rec.actionTaken || "";
+      document.getElementById('editStatus').value = rec.status || "Completed";
+
+      document.getElementById('editModal').style.display = 'block';
+    }
+
+    function calculateEditDue(dateString) {
+      if (!dateString) return;
+      const d = new Date(dateString);
+      d.setDate(d.getDate() + 15);
+      document.getElementById('editDueDate').value = d.toISOString().split('T')[0];
+    }
+
+    document.getElementById('editForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const index = parseInt(document.getElementById('editIndex').value, 10);
+      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      
+      if (records[index]) {
+        records[index].location = document.getElementById('editLocation').value.trim();
+        records[index].supervisor = document.getElementById('editSupervisor').value.trim();
+        records[index].maintenanceDate = document.getElementById('editMaintDate').value;
+        records[index].nextDueDate = document.getElementById('editDueDate').value;
+        records[index].issue = document.getElementById('editIssue').value.trim();
+        records[index].actionTaken = document.getElementById('editAction').value.trim();
+        records[index].status = document.getElementById('editStatus').value;
+
+        localStorage.setItem('maintenanceRecords', JSON.stringify(records));
+        closeModal('editModal');
+        loadHistory();
+      }
+    });
+
+    function deleteRecord(index) {
+      if (!confirm("Are you sure you want to permanently delete this maintenance entry?")) return;
+      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      records.splice(index, 1);
+      localStorage.setItem('maintenanceRecords', JSON.stringify(records));
+      loadHistory();
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).style.display = 'none';
+    }
+
+    window.onclick = function(event) {
+      if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+      }
+    };
+  </script>
+</body>
+</html>
