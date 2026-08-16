@@ -5,9 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Log Maintenance Entry</title>
   <link rel="stylesheet" href="style.css">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-  <!-- Security Guard: Must be Logged In -->
+  <!-- Security Guard: Must be Logged In to Fill Form -->
   <script>
     if (sessionStorage.getItem('isLoggedIn') !== 'true') {
       window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
@@ -23,7 +27,6 @@
 
       <div class="user-controls">
         <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
-        <!-- Dashboard Navigation -->
         <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
         <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
         <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
@@ -118,11 +121,25 @@
         </div>
       </div>
 
-      <button type="submit" class="submit-btn" style="width:100%;">Submit Maintenance Entry</button>
+      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit Maintenance Entry</button>
     </form>
   </div>
 
   <script>
+    // --- YOUR LIVE FIREBASE CONFIG ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
+      authDomain: "maintenance-tracker-9232f.firebaseapp.com",
+      projectId: "maintenance-tracker-9232f",
+      storageBucket: "maintenance-tracker-9232f.firebasestorage.app",
+      messagingSenderId: "1028949858608",
+      appId: "1:1028949858608:web:ca651824fedab23cb890f5",
+      measurementId: "G-R0560TMM98"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
     let dedicatedId = null;
 
     window.onload = function() {
@@ -180,14 +197,19 @@
 
     document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.innerText = "Syncing to Cloud Database...";
+      btn.disabled = true;
 
       const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
       const fileInput = document.getElementById('attachment');
       let base64File = null;
 
       if (fileInput.files.length > 0) {
-        if (fileInput.files[0].size > 2 * 1024 * 1024) {
-          alert("File is larger than 2MB. Please upload a smaller compressed image/file.");
+        if (fileInput.files[0].size > 1.5 * 1024 * 1024) {
+          alert("Attachment is too large. Please upload an image under 1.5MB.");
+          btn.innerText = "Submit Maintenance Entry";
+          btn.disabled = false;
           return;
         }
         base64File = await fileToBase64(fileInput.files[0]);
@@ -212,16 +234,18 @@
         createdAt: new Date().toISOString()
       };
 
-      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      records.unshift(record);
-      localStorage.setItem('maintenanceRecords', JSON.stringify(records));
-
-      alert("✅ Maintenance Entry Successfully Submitted!");
-      
-      if (dedicatedId) {
-        window.location.href = `history.html?id=${dedicatedId}`;
-      } else {
-        window.location.href = "history.html";
+      try {
+        await db.collection("maintenance_records").add(record);
+        alert("✅ Cloud Sync Successful: Entry Saved Across All Devices!");
+        if (dedicatedId) {
+          window.location.href = `history.html?id=${dedicatedId}`;
+        } else {
+          window.location.href = "history.html";
+        }
+      } catch (err) {
+        alert("❌ Error saving to cloud database: " + err.message);
+        btn.innerText = "Submit Maintenance Entry";
+        btn.disabled = false;
       }
     });
   </script>

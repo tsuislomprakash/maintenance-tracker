@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Maintenance History & Monitoring</title>
   <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="container">
@@ -23,12 +27,12 @@
       <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
     </div>
 
-    <!-- Admin Filter Box with Dedicated Submit/Filter Button -->
-    <form id="filterForm" onsubmit="executeSearch(event)" style="display:none; background:#e8eaf6; padding:15px; border-radius:6px; margin-bottom:15px; align-items:center; gap:10px; flex-wrap:wrap;">
+    <!-- Search / Filter Box Accessible to Everyone -->
+    <form id="filterForm" onsubmit="executeSearch(event)" style="background:#e8eaf6; padding:15px; border-radius:6px; margin-bottom:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <label for="filterInput" style="margin-bottom:0;"><strong>Search System ID:</strong></label>
-      <input type="text" id="filterInput" placeholder="e.g. ADG-01, ADG-12, SIG, AVA" style="max-width:280px; padding:9px;">
+      <input type="text" id="filterInput" placeholder="e.g. ADG-01, SIG-01, AVA, Gate" style="max-width:280px; padding:9px;">
       <button type="submit" class="submit-btn" style="margin:0; padding:9px 18px; font-size:13px;">Submit / Search</button>
-      <button type="button" onclick="resetSearch()" class="nav-btn" style="background:#546e7a; padding:9px 14px;">Show All (Clear)</button>
+      <button type="button" onclick="resetSearch()" class="nav-btn" style="background:#546e7a; padding:9px 14px;">Show All</button>
     </form>
 
     <div class="table-container">
@@ -49,7 +53,9 @@
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="tableBody"></tbody>
+        <tbody id="tableBody">
+          <tr><td colspan="12" style="text-align:center; padding:20px; font-weight:bold;">Connecting to Cloud Database...</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -69,7 +75,7 @@
       <span class="close-btn" onclick="closeModal('editModal')">&times;</span>
       <h3 style="margin-bottom: 15px;">Edit Maintenance Record</h3>
       <form id="editForm">
-        <input type="hidden" id="editOriginalTimestamp">
+        <input type="hidden" id="editDocId">
 
         <div class="form-group">
           <label>System ID</label>
@@ -120,37 +126,44 @@
   </div>
 
   <script>
+    // --- LIVE FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
+      authDomain: "maintenance-tracker-9232f.firebaseapp.com",
+      projectId: "maintenance-tracker-9232f",
+      storageBucket: "maintenance-tracker-9232f.firebasestorage.app",
+      messagingSenderId: "1028949858608",
+      appId: "1:1028949858608:web:ca651824fedab23cb890f5",
+      measurementId: "G-R0560TMM98"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let allCloudRecords = [];
     let dedicatedId = null;
 
     window.onload = function() {
       const urlParams = new URLSearchParams(window.location.search);
       dedicatedId = urlParams.get('id');
-      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
 
       if (dedicatedId) {
         document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
-        document.getElementById('subHeading').innerText = `Showing exclusive maintenance timeline for ${dedicatedId.toUpperCase()}`;
-        document.getElementById('filterForm').style.display = 'none';
+        document.getElementById('subHeading').innerText = `Live timeline for ${dedicatedId.toUpperCase()} (Public View)`;
       } else {
-        if (!isAdmin) {
-          alert("Master history is restricted. Please scan a dedicated QR or Login as Admin.");
-          window.location.href = "login.html?redirect=history.html";
-          return;
-        }
-        document.getElementById('pageHeading').innerText = `Master Maintenance History (All Units)`;
-        document.getElementById('subHeading').innerText = `Admin Access: Viewing records across all field units.`;
-        document.getElementById('filterForm').style.display = 'flex';
+        document.getElementById('pageHeading').innerText = `Master Maintenance History`;
+        document.getElementById('subHeading').innerText = `Cloud-connected records across all devices (Public View)`;
       }
 
       renderUserControls();
-      loadHistoryData("");
+      fetchCloudData();
     };
 
     function renderUserControls() {
       const authBox = document.getElementById('authHeader');
       const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
       const user = sessionStorage.getItem('activeUser');
-      const role = sessionStorage.getItem('userRole');
+      const role = sessionStorage.getItem('userRole') || '';
 
       let newBtnUrl = dedicatedId ? `form.html?id=${dedicatedId}` : 'form.html';
 
@@ -165,31 +178,47 @@
       } else {
         authBox.innerHTML = `
           <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
-          <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>
+          <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login for Entry/Edit</a>
         `;
+      }
+    }
+
+    async function fetchCloudData() {
+      try {
+        const snapshot = await db.collection("maintenance_records").get();
+        allCloudRecords = [];
+        snapshot.forEach(doc => {
+          allCloudRecords.push({ docId: doc.id, ...doc.data() });
+        });
+
+        // Browser-level sorting by createdAt timestamp
+        allCloudRecords.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+        displayRecords("");
+      } catch (err) {
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="12" style="color:red; text-align:center; font-weight:bold;">Failed to load cloud data: ${err.message}</td></tr>`;
       }
     }
 
     function executeSearch(e) {
       if (e) e.preventDefault();
       const searchTerm = document.getElementById('filterInput').value.trim();
-      loadHistoryData(searchTerm);
+      displayRecords(searchTerm);
     }
 
     function resetSearch() {
       document.getElementById('filterInput').value = "";
-      loadHistoryData("");
+      displayRecords("");
     }
 
-    function loadHistoryData(query) {
-      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+    function displayRecords(query) {
       const tableBody = document.getElementById('tableBody');
       const isAdmin = sessionStorage.getItem('userRole') === 'admin';
       tableBody.innerHTML = "";
 
+      let records = [...allCloudRecords];
       const normalizedQuery = (query || "").toUpperCase().replace(/\s+/g, '');
 
-      // Filtering Logic
       if (dedicatedId) {
         records = records.filter(r => (r.systemId || "").toUpperCase().replace(/\s+/g, '') === dedicatedId.toUpperCase().replace(/\s+/g, ''));
       } else if (normalizedQuery !== "") {
@@ -208,7 +237,7 @@
       today.setHours(0,0,0,0);
 
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs found matching "${query}".</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs found.</td></tr>`;
         document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
         document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
         document.getElementById('totalCount').innerText = `Total Records: 0`;
@@ -232,17 +261,15 @@
           alertBadge = `<span class="status-badge badge-ok">✅ OK (${daysDiff}d left)</span>`;
         }
 
-        const identifier = item.createdAt || item.timestamp || (item.systemId + "_" + item.maintenanceDate);
-
         const attachmentBtn = item.attachmentData 
-          ? `<button class="btn-action btn-view" onclick="viewAttachment('${identifier}')">📎 View</button>`
+          ? `<button class="btn-action btn-view" onclick="viewAttachment('${item.docId}')">📎 View</button>`
           : `<span style="color:#9e9e9e; font-size:12px;">No File</span>`;
 
         let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">View Only</span>`;
         if (isAdmin) {
           actionBtns = `
-            <button class="btn-action btn-edit" onclick="openEditModal('${identifier}')">Edit</button>
-            <button class="btn-action btn-delete" onclick="deleteRecord('${identifier}')">Delete</button>
+            <button class="btn-action btn-edit" onclick="openEditModal('${item.docId}')">Edit</button>
+            <button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')">Delete</button>
           `;
         }
 
@@ -270,9 +297,8 @@
       document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
     }
 
-    function viewAttachment(identifier) {
-      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      const rec = records.find(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) == identifier);
+    function viewAttachment(docId) {
+      const rec = allCloudRecords.find(r => r.docId === docId);
       if (!rec || !rec.attachmentData) return;
 
       const container = document.getElementById('attachmentContainer');
@@ -289,12 +315,11 @@
       document.getElementById('attachmentModal').style.display = 'block';
     }
 
-    function openEditModal(identifier) {
-      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      const rec = records.find(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) == identifier);
+    function openEditModal(docId) {
+      const rec = allCloudRecords.find(r => r.docId === docId);
       if (!rec) return;
 
-      document.getElementById('editOriginalTimestamp').value = identifier;
+      document.getElementById('editDocId').value = rec.docId;
       document.getElementById('editSystemId').value = rec.systemId || "";
       document.getElementById('editLocation').value = rec.location || "";
       document.getElementById('editSupervisor').value = rec.supervisor || "";
@@ -314,34 +339,35 @@
       document.getElementById('editDueDate').value = d.toISOString().split('T')[0];
     }
 
-    document.getElementById('editForm').addEventListener('submit', function(e) {
+    document.getElementById('editForm').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const identifier = document.getElementById('editOriginalTimestamp').value;
-      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      
-      const targetIndex = records.findIndex(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) == identifier);
+      const docId = document.getElementById('editDocId').value;
 
-      if (targetIndex !== -1) {
-        records[targetIndex].location = document.getElementById('editLocation').value.trim();
-        records[targetIndex].supervisor = document.getElementById('editSupervisor').value.trim();
-        records[targetIndex].maintenanceDate = document.getElementById('editMaintDate').value;
-        records[targetIndex].nextDueDate = document.getElementById('editDueDate').value;
-        records[targetIndex].issue = document.getElementById('editIssue').value.trim();
-        records[targetIndex].actionTaken = document.getElementById('editAction').value.trim();
-        records[targetIndex].status = document.getElementById('editStatus').value;
-
-        localStorage.setItem('maintenanceRecords', JSON.stringify(records));
+      try {
+        await db.collection("maintenance_records").doc(docId).update({
+          location: document.getElementById('editLocation').value.trim(),
+          supervisor: document.getElementById('editSupervisor').value.trim(),
+          maintenanceDate: document.getElementById('editMaintDate').value,
+          nextDueDate: document.getElementById('editDueDate').value,
+          issue: document.getElementById('editIssue').value.trim(),
+          actionTaken: document.getElementById('editAction').value.trim(),
+          status: document.getElementById('editStatus').value
+        });
         closeModal('editModal');
-        executeSearch();
+        await fetchCloudData();
+      } catch (err) {
+        alert("Error updating record: " + err.message);
       }
     });
 
-    function deleteRecord(identifier) {
-      if (!confirm("Are you sure you want to permanently delete this maintenance entry?")) return;
-      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      records = records.filter(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) != identifier);
-      localStorage.setItem('maintenanceRecords', JSON.stringify(records));
-      executeSearch();
+    async function deleteRecord(docId) {
+      if (!confirm("Are you sure you want to permanently delete this cloud entry?")) return;
+      try {
+        await db.collection("maintenance_records").doc(docId).delete();
+        await fetchCloudData();
+      } catch (err) {
+        alert("Error deleting record: " + err.message);
+      }
     }
 
     function switchAccount() {
