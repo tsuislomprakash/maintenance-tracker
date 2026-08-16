@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Central Maintenance Management Dashboard</title>
   <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
   <div class="container">
@@ -14,22 +18,34 @@
         <small style="color: #607d8b;">Monitoring Network: <strong>84 Dedicated Field Units</strong> (15-Day Routine Cycle)</small>
       </div>
 
+      <!-- Top Right User & Admin Controls -->
       <div id="authHeader" class="user-controls"></div>
     </header>
 
     <div class="card-grid">
+      <!-- 1. Daily Plan Card with Live Notification Badge -->
+      <div class="card" style="border: 2px solid #e65100; background: #fff8e1;">
+        <span id="planCountBadge" class="counter-badge">0</span>
+        <h3 style="color:#e65100;">Daily Maintenance Plan</h3>
+        <p>Admin scheduled tasks & directives. View target dates, priority & execute work orders.</p>
+        <a href="planner.html" class="nav-btn" style="background:#e65100;">Open Maintenance Plan</a>
+      </div>
+
+      <!-- 2. Form Fill Card -->
       <div class="card">
         <h3>Fill Maintenance Log</h3>
-        <p>Log a 15-day routine or breakdown service. Login required.</p>
+        <p>Log a 15-day routine or breakdown service. Authorized access required.</p>
         <a href="form.html" class="nav-btn">Open Maintenance Form</a>
       </div>
 
+      <!-- 3. History Card -->
       <div class="card">
         <h3>View Maintenance History</h3>
-        <p>Master system records, filter system ID, overdue alerts & audits.</p>
+        <p>Master system records, search system ID, overdue critical alerts & audits.</p>
         <a href="history.html" class="nav-btn" style="background:#37474f;">Open All Records</a>
       </div>
 
+      <!-- 4. QR Generator Card -->
       <div class="card">
         <h3>QR Generator for Panels</h3>
         <p>Generate & Print dedicated QR code stickers for all 84 control panels.</p>
@@ -39,8 +55,23 @@
   </div>
 
   <script>
+    // --- LIVE FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
+      authDomain: "maintenance-tracker-9232f.firebaseapp.com",
+      projectId: "maintenance-tracker-9232f",
+      storageBucket: "maintenance-tracker-9232f.firebasestorage.app",
+      messagingSenderId: "1028949858608",
+      appId: "1:1028949858608:web:ca651824fedab23cb890f5",
+      measurementId: "G-R0560TMM98"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
     window.onload = function() {
       renderUserControls();
+      listenActivePlans();
     };
 
     function renderUserControls() {
@@ -50,9 +81,15 @@
       const role = sessionStorage.getItem('userRole');
 
       if (isLoggedIn) {
+        let adminAction = "";
+        if (role === 'admin') {
+          adminAction = `<a href="planner.html" class="nav-btn" style="background:#e65100; margin-right:4px;">+ Assign Plan</a>`;
+        }
+
         authBox.innerHTML = `
-          <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
-          <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
+          <span class="user-badge-info">👤 <strong>${user}</strong> (${role ? role.toUpperCase() : ''})</span>
+          ${adminAction}
+          <button onclick="switchAccount()" class="btn-switch">Switch</button>
           <button onclick="logout()" class="btn-logout">Logout</button>
         `;
       } else {
@@ -60,6 +97,22 @@
           <a href="login.html" class="nav-btn">Login</a>
         `;
       }
+    }
+
+    // Realtime Listener for Pending Tasks
+    function listenActivePlans() {
+      db.collection("maintenance_plans").where("status", "==", "PENDING").onSnapshot(snapshot => {
+        const count = snapshot.size;
+        const badge = document.getElementById('planCountBadge');
+        if (count > 0) {
+          badge.innerText = count;
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      }, err => {
+        console.log("Plan listen notice: ", err.message);
+      });
     }
 
     function switchAccount() {
