@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log Maintenance Entry (Geo-Fenced)</title>
+  <title>Log Maintenance Entry (Role-Based Geo-Fence)</title>
   <link rel="stylesheet" href="style.css">
   
   <!-- Firebase SDKs -->
@@ -33,7 +33,7 @@
     </header>
 
     <div id="geoAlertBox" style="background:#e8f5e9; border-left:5px solid #2e7d32; padding:12px; border-radius:4px; margin-bottom:15px; font-size:13px;">
-      📍 <strong>Geo-Fencing Active:</strong> Submission requires physical presence within <strong>50 meters</strong> of the registered control panel.
+      📍 <strong>Geo-Fencing Active:</strong> Field submission requires physical presence within <strong>50 meters</strong> of the registered control panel.
     </div>
 
     <form id="maintenanceForm">
@@ -138,20 +138,19 @@
         </div>
       </div>
 
-      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Verify GPS (50m Tolerance) & Submit Log</button>
+      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit Maintenance Log</button>
     </form>
   </div>
 
   <script>
-    // =========================================================================
-    // 1. MASTER REGISTERED LOCATIONS
-    // ADG-01 is set to your exact photo coordinates: 22.758222, 86.190747
-    // =========================================================================
+    // ==========================================
+    // MASTER REGISTERED PANEL LOCATIONS
+    // ==========================================
     const REGISTERED_LOCATIONS = {
       "ADG-01": { lat: 22.758222, lng: 86.190747 }
     };
 
-    const GEO_FENCE_TOLERANCE_METERS = 50; // 50 Meters Tolerance Range
+    const GEO_FENCE_TOLERANCE_METERS = 50;
 
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
@@ -169,10 +168,24 @@
     let dedicatedId = null;
     let linkedPlanId = null;
 
+    const currentUser = sessionStorage.getItem('activeUser') || 'User';
+    const userRole = sessionStorage.getItem('userRole') || 'supervisor';
+    const isAdmin = (userRole === 'admin');
+
     window.onload = function() {
-      const user = sessionStorage.getItem('activeUser') || 'User';
-      const role = sessionStorage.getItem('userRole') || 'Supervisor';
-      document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
+      document.getElementById('userDisplay').innerText = `${currentUser} (${userRole.toUpperCase()})`;
+
+      const geoBox = document.getElementById('geoAlertBox');
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (isAdmin) {
+        geoBox.style.background = "#fff3e0";
+        geoBox.style.borderLeftColor = "#e65100";
+        geoBox.innerHTML = `🛡️ <strong>Admin Mode Active:</strong> 50m Geo-Fence Distance check is <strong>Bypassed</strong>. You can submit from any location.`;
+        submitBtn.innerText = "Submit Maintenance Log (Admin Override)";
+      } else {
+        submitBtn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
+      }
 
       const now = new Date();
       const today = now.toISOString().split('T')[0];
@@ -224,9 +237,8 @@
       document.getElementById('nextDueDate').value = d.toISOString().split('T')[0];
     }
 
-    // HAVERSINE FORMULA: Precision Distance in Meters
     function calculateDistanceInMeters(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // Earth radius in meters
+      const R = 6371e3;
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
       const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -241,20 +253,19 @@
     }
 
     function getCurrentGPS() {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         if (!navigator.geolocation) {
-          reject(new Error("Geolocation is not supported by your mobile browser."));
+          resolve(null);
         } else {
           navigator.geolocation.getCurrentPosition(
             pos => {
               resolve({
                 lat: parseFloat(pos.coords.latitude.toFixed(6)),
-                lng: parseFloat(pos.coords.longitude.toFixed(6)),
-                accuracy: pos.coords.accuracy
+                lng: parseFloat(pos.coords.longitude.toFixed(6))
               });
             },
-            err => reject(new Error("GPS Location Permission Denied. Please enable Location in your phone browser settings.")),
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 8000 }
           );
         }
       });
@@ -273,45 +284,53 @@
     document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
-      btn.innerText = "Checking 50m Geo-Fence Distance...";
+      btn.innerText = "Processing submission...";
       btn.disabled = true;
 
       const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
-      let liveGPS = null;
-
-      try {
-        liveGPS = await getCurrentGPS();
-      } catch (err) {
-        alert("🚨 Geo-Verification Error: " + err.message);
-        btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
-        btn.disabled = false;
-        return;
-      }
+      let liveGPS = await getCurrentGPS();
 
       let calculatedDistance = 0;
       let geoVerified = "VERIFIED_WITHIN_50M";
 
-      // Tolerance Verification
-      if (REGISTERED_LOCATIONS[selectedId]) {
-        const target = REGISTERED_LOCATIONS[selectedId];
-        calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, target.lat, target.lng);
-
-        if (calculatedDistance > GEO_FENCE_TOLERANCE_METERS) {
-          alert(`❌ GEO-FENCE REJECTED!\n\nYou are ${calculatedDistance} meters away from ${selectedId}.\nAllowed tolerance is maximum ${GEO_FENCE_TOLERANCE_METERS} meters.\n\nPlease stand near the equipment to submit maintenance.`);
+      // -------------------------------------------------------------
+      // ROLE-BASED GEO-FENCE VALIDATION
+      // -------------------------------------------------------------
+      if (!isAdmin) {
+        // SUPERVISOR ENFORCEMENT
+        if (!liveGPS) {
+          alert("🚨 GPS Required: Please enable phone location services to verify you are at the panel location.");
           btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
           btn.disabled = false;
           return;
         }
+
+        if (REGISTERED_LOCATIONS[selectedId]) {
+          const target = REGISTERED_LOCATIONS[selectedId];
+          calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, target.lat, target.lng);
+
+          if (calculatedDistance > GEO_FENCE_TOLERANCE_METERS) {
+            alert(`❌ GEO-FENCE REJECTED!\n\nYou are ${calculatedDistance} meters away from ${selectedId}.\nAllowed tolerance is maximum ${GEO_FENCE_TOLERANCE_METERS} meters.\n\nPlease stand near the equipment to submit maintenance.`);
+            btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
+            btn.disabled = false;
+            return;
+          }
+        }
       } else {
-        geoVerified = "REGISTERED_NEW_SPOT";
+        // ADMIN BYPASS LOGIC
+        geoVerified = "ADMIN_BYPASS";
+        if (liveGPS && REGISTERED_LOCATIONS[selectedId]) {
+          calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, REGISTERED_LOCATIONS[selectedId].lat, REGISTERED_LOCATIONS[selectedId].lng);
+        }
       }
 
+      // File Processing
       const fileInput = document.getElementById('attachment');
       let base64File = null;
       if (fileInput.files.length > 0) {
         if (fileInput.files[0].size > 1.5 * 1024 * 1024) {
           alert("Attachment is too large. Please upload an image under 1.5MB.");
-          btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
+          btn.innerText = "Submit Maintenance Log";
           btn.disabled = false;
           return;
         }
@@ -334,14 +353,14 @@
         partNumber: document.getElementById('partNumber').value.trim() || "N/A",
         issue: document.getElementById('issue').value.trim(),
         actionTaken: document.getElementById('actionTaken').value.trim(),
-        gpsLat: liveGPS.lat,
-        gpsLng: liveGPS.lng,
-        gpsMapUrl: `https://www.google.com/maps?q=${liveGPS.lat},${liveGPS.lng}`,
+        gpsLat: liveGPS ? liveGPS.lat : "Admin Override",
+        gpsLng: liveGPS ? liveGPS.lng : "Admin Override",
+        gpsMapUrl: liveGPS ? `https://www.google.com/maps?q=${liveGPS.lat},${liveGPS.lng}` : "",
         geoDistanceMeters: calculatedDistance,
         geoAuditStatus: geoVerified,
         attachmentData: base64File,
         attachmentName: fileInput.files[0] ? fileInput.files[0].name : null,
-        submittedBy: sessionStorage.getItem('activeUser') || 'Technician',
+        submittedBy: currentUser,
         createdAt: new Date().toISOString()
       };
 
@@ -352,11 +371,16 @@
           await db.collection("maintenance_plans").doc(linkedPlanId).update({
             status: "COMPLETED",
             closedAt: new Date().toISOString(),
-            closedBy: sessionStorage.getItem('activeUser') || 'Supervisor'
+            closedBy: currentUser
           });
         }
 
-        alert(`✅ GEO-FENCE PASSED!\nDistance to Equipment: ${calculatedDistance} meters (Within 50m tolerance).\nLog Successfully Synced to Cloud!`);
+        const successMsg = isAdmin 
+          ? `✅ Entry Saved (Admin Override Applied)!` 
+          : `✅ GEO-FENCE PASSED (${calculatedDistance}m from panel)!\nLog Successfully Synced!`;
+        
+        alert(successMsg);
+        
         if (dedicatedId) {
           window.location.href = `history.html?id=${encodeURIComponent(dedicatedId)}`;
         } else {
@@ -364,7 +388,7 @@
         }
       } catch (err) {
         alert("❌ Error saving: " + err.message);
-        btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
+        btn.innerText = "Submit Maintenance Log";
         btn.disabled = false;
       }
     });
