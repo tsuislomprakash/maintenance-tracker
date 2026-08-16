@@ -6,6 +6,13 @@
   <title>Central Maintenance Management Dashboard</title>
   <link rel="stylesheet" href="style.css">
 
+  <!-- Security Gate: Must be logged in to view Central Dashboard -->
+  <script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+      window.location.href = 'login.html?redirect=index.html';
+    }
+  </script>
+
   <!-- Firebase SDKs & Chart.js -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -15,8 +22,8 @@
   <div class="container">
     <header>
       <div class="header-left">
-        <h1>Central Maintenance Management Portal</h1>
-        <small style="color: #607d8b;">Monitoring Network: <strong>84 Dedicated Field Units</strong> (15-Day Routine Cycle)</small>
+        <h1>Central Agency Management Dashboard</h1>
+        <small style="color: #607d8b;">Restricted Network: <strong>84 Field Units Monitoring</strong></small>
       </div>
 
       <div id="authHeader" class="user-controls"></div>
@@ -31,7 +38,7 @@
         <a href="planner.html" class="nav-btn" style="background:#e65100;">Open Maintenance Plan</a>
       </div>
 
-      <!-- 2. Team Duty Attendance Card (NEW) -->
+      <!-- 2. Team Duty Attendance Card -->
       <div class="card" style="border: 2px solid #2e7d32; background: #e8f5e9;">
         <h3 style="color:#2e7d32;">Team Duty Attendance</h3>
         <p>Log daily shift attendance, duty areas, view history & export Excel roster report.</p>
@@ -97,32 +104,26 @@
     function renderUserControls() {
       const authBox = document.getElementById('authHeader');
       const qrCard = document.getElementById('adminQrCard');
-      const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
-      const user = sessionStorage.getItem('activeUser');
-      const role = sessionStorage.getItem('userRole');
+      const user = sessionStorage.getItem('activeUser') || 'User';
+      const role = sessionStorage.getItem('userRole') || 'supervisor';
 
-      if (isLoggedIn) {
-        let adminAction = "";
-        if (role === 'admin') {
-          qrCard.style.display = "block";
-          adminAction = `
-            <a href="planner.html" class="nav-btn" style="background:#e65100; margin-right:4px;">+ Assign Plan</a>
-            <a href="qr-generator.html" class="nav-btn" style="background:#00796b; margin-right:4px;">QR Tool</a>
-          `;
-        } else {
-          qrCard.style.display = "none";
-        }
-
-        authBox.innerHTML = `
-          <span class="user-badge-info">👤 <strong>${user}</strong> (${role ? role.toUpperCase() : ''})</span>
-          ${adminAction}
-          <button onclick="switchAccount()" class="btn-switch">Switch</button>
-          <button onclick="logout()" class="btn-logout">Logout</button>
+      let adminAction = "";
+      if (role === 'admin') {
+        qrCard.style.display = "block";
+        adminAction = `
+          <a href="planner.html" class="nav-btn" style="background:#e65100; margin-right:4px;">+ Assign Plan</a>
+          <a href="qr-generator.html" class="nav-btn" style="background:#00796b; margin-right:4px;">QR Tool</a>
         `;
       } else {
         qrCard.style.display = "none";
-        authBox.innerHTML = `<a href="login.html" class="nav-btn">Login</a>`;
       }
+
+      authBox.innerHTML = `
+        <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
+        ${adminAction}
+        <button onclick="switchAccount()" class="btn-switch">Switch</button>
+        <button onclick="logout()" class="btn-logout">Logout</button>
+      `;
     }
 
     function listenActivePlans() {
@@ -199,13 +200,12 @@
 
     function switchAccount() {
       sessionStorage.clear();
-      window.location.href = 'login.html';
+      window.location.href = 'login.html?redirect=index.html';
     }
 
     function logout() {
       sessionStorage.clear();
-      renderUserControls();
-      alert("Logged out successfully.");
+      window.location.href = 'login.html';
     }
   </script>
 </body>

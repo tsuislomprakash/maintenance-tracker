@@ -26,9 +26,8 @@
 
       <div class="user-controls">
         <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
-        <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
-        <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
-        <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
+        <!-- Contextual Back Button: Returns only to dedicated unit hub if scanned via QR -->
+        <span id="navButtonsContainer"></span>
         <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
         <button onclick="logout()" class="btn-logout">Logout</button>
       </div>
@@ -110,7 +109,6 @@
           </select>
         </div>
 
-        <!-- NEW: Spare Parts & Part Number Replacement Details -->
         <div class="form-group">
           <label for="partReplaced">Parts Replaced (if any)</label>
           <input type="text" id="partReplaced" placeholder="e.g. Flashing LED Bulb, Relay, Gear Oil">
@@ -157,11 +155,11 @@
 
     let dedicatedId = null;
     let linkedPlanId = null;
+    const userRole = sessionStorage.getItem('userRole');
 
     window.onload = function() {
       const user = sessionStorage.getItem('activeUser') || 'User';
-      const role = sessionStorage.getItem('userRole') || 'Supervisor';
-      document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
+      document.getElementById('userDisplay').innerText = `${user} (${userRole ? userRole.toUpperCase() : ''})`;
 
       const now = new Date();
       const today = now.toISOString().split('T')[0];
@@ -177,6 +175,8 @@
       const preIssue = urlParams.get('issue');
       const preType = urlParams.get('type');
 
+      const navContainer = document.getElementById('navButtonsContainer');
+
       if (dedicatedId) {
         const sysField = document.getElementById('systemId');
         sysField.value = dedicatedId.toUpperCase();
@@ -188,6 +188,18 @@
         else if (dedicatedId.includes("SIG")) document.getElementById('systemType').value = "Traffic Signal";
         else if (dedicatedId.includes("AVA")) document.getElementById('systemType').value = "AVA";
         else if (dedicatedId.includes("FL")) document.getElementById('systemType').value = "Flickering Light";
+
+        // QR User: Only give access back to unit hub & history (No dashboard link)
+        navContainer.innerHTML = `
+          <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
+          <a href="history.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#546e7a;">Unit Logs</a>
+        `;
+      } else {
+        // Admin or central user without dedicated ID
+        navContainer.innerHTML = `
+          <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+          <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
+        `;
       }
 
       if (preIssue) document.getElementById('issue').value = decodeURIComponent(preIssue);
@@ -208,7 +220,11 @@
 
     function logout() {
       sessionStorage.clear();
-      window.location.href = 'index.html';
+      if (dedicatedId) {
+        window.location.href = `device.html?id=${encodeURIComponent(dedicatedId)}`;
+      } else {
+        window.location.href = 'login.html';
+      }
     }
 
     function fileToBase64(file) {
@@ -221,7 +237,6 @@
       });
     }
 
-    // Geolocation Audit Capture
     function getGPSCoordinates() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) {
@@ -300,7 +315,7 @@
 
         alert("✅ Log Stamped with GPS & Successfully Synced!");
         if (dedicatedId) {
-          window.location.href = `history.html?id=${dedicatedId}`;
+          window.location.href = `history.html?id=${encodeURIComponent(dedicatedId)}`;
         } else {
           window.location.href = "history.html";
         }

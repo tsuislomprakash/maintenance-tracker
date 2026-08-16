@@ -28,14 +28,13 @@
       <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
     </div>
 
-    <!-- Search & Export Toolbar -->
+    <!-- Search & Export Toolbar (Master View only) -->
     <form id="filterForm" onsubmit="executeSearch(event)" style="background:#e8eaf6; padding:15px; border-radius:6px; margin-bottom:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <label for="filterInput" style="margin-bottom:0;"><strong>Search System ID:</strong></label>
       <input type="text" id="filterInput" placeholder="e.g. ADG-01, SIG-01, AVA, Gate" style="max-width:260px; padding:9px;">
       <button type="submit" class="submit-btn" style="margin:0; padding:9px 18px; font-size:13px;">Search</button>
       <button type="button" onclick="resetSearch()" class="nav-btn" style="background:#546e7a; padding:9px 14px;">Show All</button>
       
-      <!-- NEW: Excel Download Engine Button -->
       <button type="button" onclick="exportToExcel()" class="btn-action btn-excel" style="padding:9px 16px; margin-left:auto;">📊 Export to Excel (.xlsx)</button>
     </form>
 
@@ -161,13 +160,20 @@
     window.onload = function() {
       const urlParams = new URLSearchParams(window.location.search);
       dedicatedId = urlParams.get('id');
+      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
 
       if (dedicatedId) {
         document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
-        document.getElementById('subHeading').innerText = `Live timeline for ${dedicatedId.toUpperCase()}`;
+        document.getElementById('subHeading').innerText = `Isolated timeline for ${dedicatedId.toUpperCase()} (Other systems hidden)`;
+        document.getElementById('filterForm').style.display = 'none';
       } else {
+        if (!isAdmin) {
+          alert("Master history is restricted. Please scan a dedicated QR or Login as Admin.");
+          window.location.href = "login.html?redirect=history.html";
+          return;
+        }
         document.getElementById('pageHeading').innerText = `Master Maintenance History`;
-        document.getElementById('subHeading').innerText = `Cloud-connected records across 84 Field Units`;
+        document.getElementById('subHeading').innerText = `Central Agency Master Records (All 84 Units)`;
       }
 
       renderUserControls();
@@ -180,22 +186,37 @@
       const user = sessionStorage.getItem('activeUser');
       const role = sessionStorage.getItem('userRole') || '';
 
-      let newBtnUrl = dedicatedId ? `form.html?id=${dedicatedId}` : 'form.html';
-
-      if (isLoggedIn) {
-        authBox.innerHTML = `
-          <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
-          <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
-          <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
-          <a href="${newBtnUrl}" class="nav-btn">+ New Entry</a>
-          <button onclick="switchAccount()" class="btn-switch">Switch</button>
-          <button onclick="logout()" class="btn-logout">Logout</button>
-        `;
+      if (dedicatedId) {
+        // QR Mode: No Dashboard button
+        if (isLoggedIn) {
+          authBox.innerHTML = `
+            <span class="user-badge-info">👤 <strong>${user}</strong></span>
+            <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
+            <a href="form.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn">+ New Entry</a>
+            <button onclick="switchAccount()" class="btn-switch">Switch</button>
+            <button onclick="logout()" class="btn-logout">Logout</button>
+          `;
+        } else {
+          authBox.innerHTML = `
+            <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
+            <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>
+          `;
+        }
       } else {
-        authBox.innerHTML = `
-          <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
-          <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login for Entry/Edit</a>
-        `;
+        // Central Agency Master Mode
+        if (isLoggedIn) {
+          authBox.innerHTML = `
+            <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
+            <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+            <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
+            <button onclick="switchAccount()" class="btn-switch">Switch</button>
+            <button onclick="logout()" class="btn-logout">Logout</button>
+          `;
+        } else {
+          authBox.innerHTML = `
+            <a href="login.html?redirect=history.html" class="nav-btn">Login for Master View</a>
+          `;
+        }
       }
     }
 
@@ -233,6 +254,7 @@
       let records = [...allCloudRecords];
       const normalizedQuery = (query || "").toUpperCase().replace(/\s+/g, '');
 
+      // Strict Unit Isolation
       if (dedicatedId) {
         records = records.filter(r => (r.systemId || "").toUpperCase().replace(/\s+/g, '') === dedicatedId.toUpperCase().replace(/\s+/g, ''));
       } else if (normalizedQuery !== "") {
@@ -253,7 +275,7 @@
       today.setHours(0,0,0,0);
 
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs recorded for this equipment.</td></tr>`;
         document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
         document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
         document.getElementById('totalCount').innerText = `Total Records: 0`;
@@ -318,7 +340,6 @@
       document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
     }
 
-    // EXCEL EXPORT ENGINE
     function exportToExcel() {
       if (displayedRecords.length === 0) {
         alert("No records available to export.");
@@ -351,7 +372,7 @@
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Maintenance_Report");
 
-      XLSX.writeFile(workbook, `Maintenance_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(workbook, `Maintenance_Report_${dedicatedId || 'Master'}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function viewAttachment(docId) {

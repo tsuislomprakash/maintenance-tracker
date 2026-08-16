@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dedicated Equipment Control</title>
+  <title>Dedicated Equipment Maintenance Portal</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container" style="max-width:700px;">
     <header>
       <div class="header-left">
-        <h2>Field Unit Access</h2>
-        <small style="color:#607d8b;">Dedicated Control Panel Interface</small>
+        <h2>Dedicated Field Unit Hub</h2>
+        <small style="color:#607d8b;">Unit-Specific Inspection & Maintenance Interface</small>
       </div>
       <div id="authHeader" class="user-controls"></div>
     </header>
@@ -22,16 +22,16 @@
     </div>
 
     <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
-      <div class="card">
+      <div class="card" style="border: 2px solid #1a237e;">
         <h3>Fill Maintenance</h3>
-        <p>Log routine 15-day maintenance or breakdown for this unit.</p>
-        <button onclick="goToForm()" class="submit-btn" style="width:100%; margin:0;">Open Form</button>
+        <p>Log routine 15-day service or breakdown repair for this unit.</p>
+        <button onclick="goToForm()" class="submit-btn" style="width:100%; margin:0;">Open Maintenance Form</button>
       </div>
 
-      <div class="card">
-        <h3>View History</h3>
-        <p>Inspect past maintenance records for this unit only.</p>
-        <button onclick="goToHistory()" class="nav-btn" style="width:100%; background:#37474f; padding:12px;">Unit History</button>
+      <div class="card" style="border: 2px solid #37474f;">
+        <h3>Unit History</h3>
+        <p>View past service records and logs exclusively for this unit.</p>
+        <button onclick="goToHistory()" class="nav-btn" style="width:100%; background:#37474f; padding:12px;">View Unit Logs</button>
       </div>
     </div>
   </div>
@@ -45,12 +45,12 @@
 
       if (!currentSystemId) {
         alert("Invalid QR Code: No System ID detected.");
-        window.location.href = "index.html";
+        document.body.innerHTML = "<h3 style='text-align:center; margin-top:50px; color:red;'>Invalid QR Code. Please re-scan.</h3>";
         return;
       }
 
-      document.getElementById('panelIdDisplay').innerText = `System ID: ${currentSystemId}`;
-      document.getElementById('panelDetailsDisplay').innerText = `Connected to field maintenance network. All actions locked to this unit.`;
+      document.getElementById('panelIdDisplay').innerText = `System ID: ${currentSystemId.toUpperCase()}`;
+      document.getElementById('panelDetailsDisplay').innerText = `Authenticated Session. All logs and history are strictly isolated to this equipment.`;
       renderUserControls();
     };
 
@@ -62,24 +62,22 @@
       if (isLoggedIn) {
         authBox.innerHTML = `
           <span class="user-badge-info">👤 <strong>${user}</strong></span>
-          <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
           <button onclick="switchAccount()" class="btn-switch">Switch</button>
           <button onclick="logout()" class="btn-logout">Logout</button>
         `;
       } else {
         authBox.innerHTML = `
-          <a href="index.html" class="nav-btn" style="background:#546e7a; margin-right:5px;">Dashboard</a>
           <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>
         `;
       }
     }
 
     function goToForm() {
-      window.location.href = `form.html?id=${currentSystemId}`;
+      window.location.href = `form.html?id=${encodeURIComponent(currentSystemId)}`;
     }
 
     function goToHistory() {
-      window.location.href = `history.html?id=${currentSystemId}`;
+      window.location.href = `history.html?id=${encodeURIComponent(currentSystemId)}`;
     }
 
     function switchAccount() {
