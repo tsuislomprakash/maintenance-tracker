@@ -44,7 +44,7 @@
             <th>Type</th>
             <th>Location</th>
             <th>Supervisor</th>
-            <th>Done Date</th>
+            <th>Done Date & Time</th>
             <th>Next Due (15d)</th>
             <th>Alert Status</th>
             <th>Issue / Action</th>
@@ -98,6 +98,11 @@
         </div>
 
         <div class="form-group">
+          <label>Time of Maintenance</label>
+          <input type="time" id="editMaintTime">
+        </div>
+
+        <div class="form-group">
           <label>Next Due Date (Auto 15 Days)</label>
           <input type="date" id="editDueDate" required style="background:#f1f8e9; font-weight:bold;">
         </div>
@@ -126,7 +131,6 @@
   </div>
 
   <script>
-    // --- LIVE FIREBASE CONFIGURATION ---
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
       authDomain: "maintenance-tracker-9232f.firebaseapp.com",
@@ -171,6 +175,7 @@
         authBox.innerHTML = `
           <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
           <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+          <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
           <a href="${newBtnUrl}" class="nav-btn">+ New Entry</a>
           <button onclick="switchAccount()" class="btn-switch">Switch</button>
           <button onclick="logout()" class="btn-logout">Logout</button>
@@ -178,6 +183,7 @@
       } else {
         authBox.innerHTML = `
           <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
+          <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
           <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login for Entry/Edit</a>
         `;
       }
@@ -191,9 +197,7 @@
           allCloudRecords.push({ docId: doc.id, ...doc.data() });
         });
 
-        // Browser-level sorting by createdAt timestamp
         allCloudRecords.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
         displayRecords("");
       } catch (err) {
         document.getElementById('tableBody').innerHTML = `<tr><td colspan="12" style="color:red; text-align:center; font-weight:bold;">Failed to load cloud data: ${err.message}</td></tr>`;
@@ -280,7 +284,7 @@
             <td>${item.systemType}<br><small style="color:#546e7a;">(${item.maintenanceType})</small></td>
             <td>${item.location}</td>
             <td>${item.supervisor}</td>
-            <td>${item.maintenanceDate}</td>
+            <td>${item.maintenanceDate}<br><small style="color:#607d8b;">🕒 ${item.maintenanceTime || '--:--'}</small></td>
             <td>${item.nextDueDate}</td>
             <td>${alertBadge}</td>
             <td><small><strong>I:</strong> ${item.issue}<br><strong>A:</strong> ${item.actionTaken}</small></td>
@@ -324,6 +328,7 @@
       document.getElementById('editLocation').value = rec.location || "";
       document.getElementById('editSupervisor').value = rec.supervisor || "";
       document.getElementById('editMaintDate').value = rec.maintenanceDate || "";
+      document.getElementById('editMaintTime').value = rec.maintenanceTime || "";
       document.getElementById('editDueDate').value = rec.nextDueDate || "";
       document.getElementById('editIssue').value = rec.issue || "";
       document.getElementById('editAction').value = rec.actionTaken || "";
@@ -348,6 +353,7 @@
           location: document.getElementById('editLocation').value.trim(),
           supervisor: document.getElementById('editSupervisor').value.trim(),
           maintenanceDate: document.getElementById('editMaintDate').value,
+          maintenanceTime: document.getElementById('editMaintTime').value,
           nextDueDate: document.getElementById('editDueDate').value,
           issue: document.getElementById('editIssue').value.trim(),
           actionTaken: document.getElementById('editAction').value.trim(),

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maintenance Schedule & Work Orders</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h2>Maintenance Schedule & Work Orders</h2>
+        <small style="color:#607d8b;">Admin Daily/Weekly Directives across all 84 Field Units</small>
+      </div>
+
+      <div class="user-controls">
+        <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+        <span id="userBadge" class="user-badge-info"></span>
+      </div>
+    </header>
+
+    <!-- Admin Task Creator Form (Visible ONLY to Admin) -->
+    <div id="adminCreateSection" style="display:none; background:#fff3e0; border:1px solid #ffe0b2; padding:20px; border-radius:8px; margin-bottom:25px;">
+      <h3 style="color:#e65100; margin-bottom:12px;">+ Assign New Maintenance Plan / Directive</h3>
+      <form id="planForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="planSystemId">Select System ID (84 Units) *</label>
+            <select id="planSystemId" required>
+              <option value="">-- Choose Equipment --</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="planDate">Scheduled Target Date *</label>
+            <input type="date" id="planDate" required>
+          </div>
+
+          <div class="form-group">
+            <label for="planTime">Scheduled Target Time *</label>
+            <input type="time" id="planTime" required>
+          </div>
+
+          <div class="form-group">
+            <label for="planType">Maintenance Type *</label>
+            <select id="planType" required>
+              <option value="Preventive">Preventive (Routine Check)</option>
+              <option value="Breakdown">Breakdown Repair</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="planPriority">Priority Level *</label>
+            <select id="planPriority" required>
+              <option value="Normal">Normal</option>
+              <option value="High">High</option>
+              <option value="Emergency / Critical">Emergency / Critical</option>
+            </select>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="planInstructions">Inspection Instructions / Issue to Check *</label>
+            <textarea id="planInstructions" rows="2" placeholder="e.g. Check boom arm motor alignment, inspect flashing LED circuit, lubricate gear assembly" required></textarea>
+          </div>
+        </div>
+
+        <button type="submit" id="planSubmitBtn" class="submit-btn" style="background:#e65100; margin-top:10px;">Broadcast Maintenance Plan</button>
+      </form>
+    </div>
+
+    <!-- Active Plan Listing -->
+    <h3 style="margin-bottom:15px; color:#1a237e;">Active Pending Work Orders</h3>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>System ID</th>
+            <th>Equipment Type</th>
+            <th>Target Date & Time</th>
+            <th>Maintenance Type</th>
+            <th>Priority</th>
+            <th>Instructions / Issue to Check</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="planTableBody">
+          <tr><td colspan="8" style="text-align:center; padding:20px;">Fetching schedule plans...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
+      authDomain: "maintenance-tracker-9232f.firebaseapp.com",
+      projectId: "maintenance-tracker-9232f",
+      storageBucket: "maintenance-tracker-9232f.firebasestorage.app",
+      messagingSenderId: "1028949858608",
+      appId: "1:1028949858608:web:ca651824fedab23cb890f5",
+      measurementId: "G-R0560TMM98"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+    let masterUnits = [];
+
+    window.onload = function() {
+      const user = sessionStorage.getItem('activeUser') || 'Guest Viewer';
+      document.getElementById('userBadge').innerHTML = `👤 <strong>${user}</strong>`;
+
+      if (isAdmin) {
+        document.getElementById('adminCreateSection').style.display = 'block';
+        populate84UnitsDropdown();
+        document.getElementById('planDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('planTime').value = "09:00";
+      }
+
+      loadActivePlans();
+    };
+
+    function populate84UnitsDropdown() {
+      const select = document.getElementById('planSystemId');
+      masterUnits = [];
+      for (let i = 1; i <= 14; i++) masterUnits.push({ id: `ADG-${i.toString().padStart(2, '0')}`, type: "Automatic Drop Gate" });
+      for (let i = 1; i <= 15; i++) masterUnits.push({ id: `MDG-${i.toString().padStart(2, '0')}`, type: "Manual Drop Gate" });
+      for (let i = 1; i <= 9; i++) masterUnits.push({ id: `SIG-${i.toString().padStart(2, '0')}`, type: "Traffic Signal" });
+      for (let i = 1; i <= 31; i++) masterUnits.push({ id: `AVA-${i.toString().padStart(2, '0')}`, type: "AVA" });
+      for (let i = 1; i <= 15; i++) masterUnits.push({ id: `FL-${i.toString().padStart(2, '0')}`, type: "Flickering Light" });
+
+      masterUnits.forEach(u => {
+        select.innerHTML += `<option value="${u.id}" data-type="${u.type}">${u.id} (${u.type})</option>`;
+      });
+    }
+
+    // Submit Plan by Admin
+    document.getElementById('planForm')?.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('planSubmitBtn');
+      btn.innerText = "Broadcasting Plan...";
+      btn.disabled = true;
+
+      const sel = document.getElementById('planSystemId');
+      const selectedOption = sel.options[sel.selectedIndex];
+      const type = selectedOption.getAttribute('data-type') || 'Equipment';
+
+      const planData = {
+        systemId: sel.value,
+        systemType: type,
+        targetDate: document.getElementById('planDate').value,
+        targetTime: document.getElementById('planTime').value,
+        maintenanceType: document.getElementById('planType').value,
+        priority: document.getElementById('planPriority').value,
+        instructions: document.getElementById('planInstructions').value.trim(),
+        status: "PENDING",
+        assignedBy: sessionStorage.getItem('activeUser') || 'Admin',
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        await db.collection("maintenance_plans").add(planData);
+        alert("✅ Maintenance Plan successfully broadcasted!");
+        document.getElementById('planInstructions').value = "";
+        btn.innerText = "Broadcast Maintenance Plan";
+        btn.disabled = false;
+      } catch (err) {
+        alert("Error creating plan: " + err.message);
+        btn.disabled = false;
+      }
+    });
+
+    // Realtime Load Plans
+    function loadActivePlans() {
+      db.collection("maintenance_plans").where("status", "==", "PENDING").onSnapshot(snapshot => {
+        const tableBody = document.getElementById('planTableBody');
+        tableBody.innerHTML = "";
+
+        if (snapshot.empty) {
+          tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:25px; color:#2e7d32; font-weight:bold;">🎉 All Scheduled Plans are Completed. No Pending Directives!</td></tr>`;
+          return;
+        }
+
+        let index = 1;
+        snapshot.forEach(doc => {
+          const plan = doc.data();
+          const docId = doc.id;
+
+          let priorityBadge = `<span class="status-badge badge-ok">${plan.priority}</span>`;
+          if (plan.priority.includes("Critical") || plan.priority.includes("Emergency")) {
+            priorityBadge = `<span class="status-badge badge-critical">🔥 ${plan.priority}</span>`;
+          } else if (plan.priority === "High") {
+            priorityBadge = `<span class="status-badge badge-due-soon">⚠️ High</span>`;
+          }
+
+          let deleteBtn = isAdmin ? `<button onclick="cancelPlan('${docId}')" class="btn-action btn-delete" style="font-size:11px;">Cancel Plan</button>` : '';
+
+          const row = `
+            <tr>
+              <td>${index++}</td>
+              <td><strong>${plan.systemId}</strong></td>
+              <td>${plan.systemType}</td>
+              <td><strong>${plan.targetDate}</strong><br><small style="color:#546e7a;">🕒 ${plan.targetTime}</small></td>
+              <td>${plan.maintenanceType}</td>
+              <td>${priorityBadge}</td>
+              <td>${plan.instructions}</td>
+              <td>
+                <button onclick="executePlan('${plan.systemId}', '${docId}', '${encodeURIComponent(plan.instructions)}', '${plan.maintenanceType}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Execute & Log</button>
+                ${deleteBtn}
+              </td>
+            </tr>
+          `;
+          tableBody.insertAdjacentHTML('beforeend', row);
+        });
+      });
+    }
+
+    function executePlan(systemId, planDocId, instructions, maintType) {
+      window.location.href = `form.html?id=${systemId}&planId=${planDocId}&issue=${instructions}&type=${maintType}`;
+    }
+
+    async function cancelPlan(docId) {
+      if (!confirm("Are you sure you want to cancel this scheduled directive?")) return;
+      try {
+        await db.collection("maintenance_plans").doc(docId).delete();
+      } catch (err) {
+        alert("Error canceling plan: " + err.message);
+      }
+    }
+  </script>
+</body>
+</html>

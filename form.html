@@ -28,6 +28,7 @@
       <div class="user-controls">
         <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
         <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+        <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
         <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
         <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
         <button onclick="logout()" class="btn-logout">Logout</button>
@@ -82,6 +83,12 @@
           <input type="date" id="maintenanceDate" required onchange="calculateNextDue(this.value)">
         </div>
 
+        <!-- NEW: Maintenance Time Field -->
+        <div class="form-group">
+          <label for="maintenanceTime">Time of Maintenance *</label>
+          <input type="time" id="maintenanceTime" required>
+        </div>
+
         <div class="form-group">
           <label for="nextDueDate">Next Due Date (Auto +15 Days) *</label>
           <input type="date" id="nextDueDate" required style="background:#f1f8e9; font-weight:bold;">
@@ -106,7 +113,7 @@
         </div>
 
         <div class="form-group full-width">
-          <label for="issue">Issue (if any) *</label>
+          <label for="issue">Issue (if any) / Task Checked *</label>
           <textarea id="issue" rows="2" placeholder="Enter 'Nil' or 'None' if preventive routine" required></textarea>
         </div>
 
@@ -121,12 +128,11 @@
         </div>
       </div>
 
-      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit Maintenance Entry</button>
+      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit & Close Maintenance Entry</button>
     </form>
   </div>
 
   <script>
-    // --- YOUR LIVE FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
       authDomain: "maintenance-tracker-9232f.firebaseapp.com",
@@ -141,18 +147,26 @@
     const db = firebase.firestore();
 
     let dedicatedId = null;
+    let linkedPlanId = null;
 
     window.onload = function() {
       const user = sessionStorage.getItem('activeUser') || 'User';
       const role = sessionStorage.getItem('userRole') || 'Supervisor';
       document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
 
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const timeNow = now.toTimeString().substring(0, 5);
+
       document.getElementById('maintenanceDate').value = today;
+      document.getElementById('maintenanceTime').value = timeNow;
       calculateNextDue(today);
 
       const urlParams = new URLSearchParams(window.location.search);
       dedicatedId = urlParams.get('id');
+      linkedPlanId = urlParams.get('planId');
+      const preIssue = urlParams.get('issue');
+      const preType = urlParams.get('type');
 
       if (dedicatedId) {
         const sysField = document.getElementById('systemId');
@@ -165,6 +179,13 @@
         else if (dedicatedId.includes("SIG")) document.getElementById('systemType').value = "Traffic Signal";
         else if (dedicatedId.includes("AVA")) document.getElementById('systemType').value = "AVA";
         else if (dedicatedId.includes("FL")) document.getElementById('systemType').value = "Flickering Light";
+      }
+
+      if (preIssue) {
+        document.getElementById('issue').value = decodeURIComponent(preIssue);
+      }
+      if (preType) {
+        document.getElementById('maintenanceType').value = preType;
       }
     };
 
@@ -208,7 +229,7 @@
       if (fileInput.files.length > 0) {
         if (fileInput.files[0].size > 1.5 * 1024 * 1024) {
           alert("Attachment is too large. Please upload an image under 1.5MB.");
-          btn.innerText = "Submit Maintenance Entry";
+          btn.innerText = "Submit & Close Maintenance Entry";
           btn.disabled = false;
           return;
         }
@@ -223,6 +244,7 @@
         systemType: document.getElementById('systemType').value,
         maintenanceType: document.getElementById('maintenanceType').value,
         maintenanceDate: document.getElementById('maintenanceDate').value,
+        maintenanceTime: document.getElementById('maintenanceTime').value,
         nextDueDate: document.getElementById('nextDueDate').value,
         priority: document.getElementById('priority').value,
         status: document.getElementById('status').value,
@@ -236,7 +258,17 @@
 
       try {
         await db.collection("maintenance_records").add(record);
-        alert("✅ Cloud Sync Successful: Entry Saved Across All Devices!");
+
+        // If this was an assigned plan, auto-close it from the plan board
+        if (linkedPlanId) {
+          await db.collection("maintenance_plans").doc(linkedPlanId).update({
+            status: "COMPLETED",
+            closedAt: new Date().toISOString(),
+            closedBy: sessionStorage.getItem('activeUser') || 'Supervisor'
+          });
+        }
+
+        alert("✅ Maintenance Entry Logged & Plan Marked as Completed!");
         if (dedicatedId) {
           window.location.href = `history.html?id=${dedicatedId}`;
         } else {
@@ -244,7 +276,7 @@
         }
       } catch (err) {
         alert("❌ Error saving to cloud database: " + err.message);
-        btn.innerText = "Submit Maintenance Entry";
+        btn.innerText = "Submit & Close Maintenance Entry";
         btn.disabled = false;
       }
     });
