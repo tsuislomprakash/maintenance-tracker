@@ -63,6 +63,12 @@
             </select>
           </div>
 
+          <!-- Target WhatsApp Contact Number -->
+          <div class="form-group">
+            <label for="planPhone">Supervisor WhatsApp Number (with Country Code) *</label>
+            <input type="text" id="planPhone" value="91" placeholder="e.g. 8789341404" required>
+          </div>
+
           <div class="form-group full-width">
             <label for="planInstructions">Inspection Instructions / Issue to Check *</label>
             <textarea id="planInstructions" rows="2" placeholder="e.g. Check boom arm motor, inspect flashing LED circuit, check cables" required></textarea>
@@ -85,18 +91,25 @@
             <th>Target Date & Time</th>
             <th>Maintenance Type</th>
             <th>Priority</th>
-            <th>Instructions / Issue to Check</th>
+            <th>Assigned Mobile</th>
+            <th>Instructions</th>
             <th>Action</th>
           </tr>
         </thead>
         <tbody id="planTableBody">
-          <tr><td colspan="8" style="text-align:center; padding:20px; font-weight:bold;">Fetching schedule plans...</td></tr>
+          <tr><td colspan="9" style="text-align:center; padding:20px; font-weight:bold;">Fetching schedule plans...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
   <script>
+    // -------------------------------------------------------------
+    // DEFAULT CONFIGURATION: Default Supervisor WhatsApp Number
+    // Yahan apna standard 10-digit number likhein (Country code '91' ke sath)
+    const DEFAULT_WHATSAPP_NUMBER = "919876543210"; 
+    // -------------------------------------------------------------
+
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
       authDomain: "maintenance-tracker-9232f.firebaseapp.com",
@@ -122,6 +135,7 @@
         populate84UnitsDropdown();
         document.getElementById('planDate').value = new Date().toISOString().split('T')[0];
         document.getElementById('planTime').value = "09:00";
+        document.getElementById('planPhone').value = DEFAULT_WHATSAPP_NUMBER;
       }
 
       loadActivePlans();
@@ -150,6 +164,7 @@
       const sel = document.getElementById('planSystemId');
       const selectedOption = sel.options[sel.selectedIndex];
       const type = selectedOption.getAttribute('data-type') || 'Equipment';
+      const targetPhone = document.getElementById('planPhone').value.trim().replace(/\D/g, '');
 
       const planData = {
         systemId: sel.value,
@@ -158,6 +173,7 @@
         targetTime: document.getElementById('planTime').value,
         maintenanceType: document.getElementById('planType').value,
         priority: document.getElementById('planPriority').value,
+        targetPhone: targetPhone || DEFAULT_WHATSAPP_NUMBER,
         instructions: document.getElementById('planInstructions').value.trim(),
         status: "PENDING",
         assignedBy: sessionStorage.getItem('activeUser') || 'Admin',
@@ -168,9 +184,9 @@
         await db.collection("maintenance_plans").add(planData);
         alert("✅ Maintenance Plan broadcasted successfully!");
         
-        // Optional instant WhatsApp Alert dispatch
-        if (confirm("Send WhatsApp alert notification to Field Duty Group?")) {
-          sendWhatsAppPlanAlert(planData);
+        // Direct WhatsApp Alert Dispatch to Assigned Phone Number
+        if (confirm(`Send direct WhatsApp notification to +${planData.targetPhone}?`)) {
+          sendDirectWhatsAppAlert(planData);
         }
 
         document.getElementById('planInstructions').value = "";
@@ -182,9 +198,13 @@
       }
     });
 
-    function sendWhatsAppPlanAlert(plan) {
+    // Dedicated Number Direct WhatsApp Launcher
+    function sendDirectWhatsAppAlert(plan) {
+      const phone = plan.targetPhone || DEFAULT_WHATSAPP_NUMBER;
       const msg = encodeURIComponent(`🚨 *MAINTENANCE DIRECTIVE ASSIGNED*\n\n*Unit ID:* ${plan.systemId} (${plan.systemType})\n*Target:* ${plan.targetDate} at ${plan.targetTime}\n*Type:* ${plan.maintenanceType}\n*Priority:* ${plan.priority}\n*Instructions:* ${plan.instructions}\n\n_Please execute maintenance on time._`);
-      window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+      
+      // Direct Number Hook
+      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${msg}`, '_blank');
     }
 
     function loadActivePlans() {
@@ -193,7 +213,7 @@
         tableBody.innerHTML = "";
 
         if (snapshot.empty) {
-          tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:25px; color:#2e7d32; font-weight:bold;">🎉 All Scheduled Plans are Completed. No Pending Directives!</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:25px; color:#2e7d32; font-weight:bold;">🎉 All Scheduled Plans are Completed. No Pending Directives!</td></tr>`;
           return;
         }
 
@@ -211,7 +231,7 @@
 
           let deleteBtn = isAdmin ? `<button onclick="cancelPlan('${docId}')" class="btn-action btn-delete" style="font-size:11px;">Cancel Plan</button>` : '';
 
-          const whatsappShareBtn = `<button onclick="sendWhatsAppPlanAlert(${JSON.stringify(plan).replace(/"/g, '&quot;')})" class="btn-action btn-whatsapp" style="font-size:11px;">📲 WhatsApp</button>`;
+          const whatsappDirectBtn = `<button onclick="sendDirectWhatsAppAlert(${JSON.stringify(plan).replace(/"/g, '&quot;')})" class="btn-action btn-whatsapp" style="font-size:11px;">📲 Send WA</button>`;
 
           const row = `
             <tr>
@@ -221,10 +241,11 @@
               <td><strong>${plan.targetDate}</strong><br><small style="color:#546e7a;">🕒 ${plan.targetTime}</small></td>
               <td>${plan.maintenanceType}</td>
               <td>${priorityBadge}</td>
+              <td><small style="color:#00796b; font-weight:bold;">+${plan.targetPhone || DEFAULT_WHATSAPP_NUMBER}</small></td>
               <td>${plan.instructions}</td>
               <td>
                 <button onclick="executePlan('${plan.systemId}', '${docId}', '${encodeURIComponent(plan.instructions)}', '${plan.maintenanceType}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Execute & Log</button>
-                ${whatsappShareBtn}
+                ${whatsappDirectBtn}
                 ${deleteBtn}
               </td>
             </tr>
