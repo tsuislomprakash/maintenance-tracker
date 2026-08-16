@@ -23,12 +23,12 @@
       <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
     </div>
 
-    <!-- Admin Filter Box -->
-    <form id="filterForm" onsubmit="event.preventDefault(); applyFilter();" style="display:none; background:#e8eaf6; padding:12px; border-radius:6px; margin-bottom:15px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-      <label for="filterInput"><strong>Filter System ID:</strong></label>
-      <input type="text" id="filterInput" placeholder="Type & Enter (e.g. ADG-01, SIG-02)" oninput="applyFilter()" style="max-width:280px; padding:8px;">
-      <button type="submit" class="submit-btn" style="margin:0; padding:8px 14px; font-size:13px;">Apply Filter</button>
-      <button type="button" onclick="clearFilter()" class="nav-btn" style="background:#546e7a; padding:8px 14px;">Show All</button>
+    <!-- Admin Filter Box with Dedicated Submit/Filter Button -->
+    <form id="filterForm" onsubmit="executeSearch(event)" style="display:none; background:#e8eaf6; padding:15px; border-radius:6px; margin-bottom:15px; align-items:center; gap:10px; flex-wrap:wrap;">
+      <label for="filterInput" style="margin-bottom:0;"><strong>Search System ID:</strong></label>
+      <input type="text" id="filterInput" placeholder="e.g. ADG-01, ADG-12, SIG, AVA" style="max-width:280px; padding:9px;">
+      <button type="submit" class="submit-btn" style="margin:0; padding:9px 18px; font-size:13px;">Submit / Search</button>
+      <button type="button" onclick="resetSearch()" class="nav-btn" style="background:#546e7a; padding:9px 14px;">Show All (Clear)</button>
     </form>
 
     <div class="table-container">
@@ -69,7 +69,7 @@
       <span class="close-btn" onclick="closeModal('editModal')">&times;</span>
       <h3 style="margin-bottom: 15px;">Edit Maintenance Record</h3>
       <form id="editForm">
-        <input type="hidden" id="editOriginalId">
+        <input type="hidden" id="editOriginalTimestamp">
 
         <div class="form-group">
           <label>System ID</label>
@@ -125,7 +125,6 @@
     window.onload = function() {
       const urlParams = new URLSearchParams(window.location.search);
       dedicatedId = urlParams.get('id');
-
       const isAdmin = sessionStorage.getItem('userRole') === 'admin';
 
       if (dedicatedId) {
@@ -134,17 +133,17 @@
         document.getElementById('filterForm').style.display = 'none';
       } else {
         if (!isAdmin) {
-          alert("General history is restricted. Please scan a dedicated QR or Login as Admin.");
+          alert("Master history is restricted. Please scan a dedicated QR or Login as Admin.");
           window.location.href = "login.html?redirect=history.html";
           return;
         }
         document.getElementById('pageHeading').innerText = `Master Maintenance History (All Units)`;
-        document.getElementById('subHeading').innerText = `Admin Access: Viewing records across all 84 field units.`;
+        document.getElementById('subHeading').innerText = `Admin Access: Viewing records across all field units.`;
         document.getElementById('filterForm').style.display = 'flex';
       }
 
       renderUserControls();
-      renderTable();
+      loadHistoryData("");
     };
 
     function renderUserControls() {
@@ -171,20 +170,36 @@
       }
     }
 
-    function renderTable(filterKeyword = "") {
+    function executeSearch(e) {
+      if (e) e.preventDefault();
+      const searchTerm = document.getElementById('filterInput').value.trim();
+      loadHistoryData(searchTerm);
+    }
+
+    function resetSearch() {
+      document.getElementById('filterInput').value = "";
+      loadHistoryData("");
+    }
+
+    function loadHistoryData(query) {
       let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
       const tableBody = document.getElementById('tableBody');
       const isAdmin = sessionStorage.getItem('userRole') === 'admin';
       tableBody.innerHTML = "";
 
+      const normalizedQuery = (query || "").toUpperCase().replace(/\s+/g, '');
+
+      // Filtering Logic
       if (dedicatedId) {
-        records = records.filter(r => r.systemId.toUpperCase() === dedicatedId.toUpperCase());
-      } else if (filterKeyword) {
-        records = records.filter(r => 
-          r.systemId.toUpperCase().includes(filterKeyword.toUpperCase()) ||
-          r.location.toUpperCase().includes(filterKeyword.toUpperCase()) ||
-          r.supervisor.toUpperCase().includes(filterKeyword.toUpperCase())
-        );
+        records = records.filter(r => (r.systemId || "").toUpperCase().replace(/\s+/g, '') === dedicatedId.toUpperCase().replace(/\s+/g, ''));
+      } else if (normalizedQuery !== "") {
+        records = records.filter(r => {
+          const sysId = (r.systemId || "").toUpperCase().replace(/\s+/g, '');
+          const sysType = (r.systemType || "").toUpperCase().replace(/\s+/g, '');
+          const loc = (r.location || "").toUpperCase().replace(/\s+/g, '');
+          const sup = (r.supervisor || "").toUpperCase().replace(/\s+/g, '');
+          return sysId.includes(normalizedQuery) || sysType.includes(normalizedQuery) || loc.includes(normalizedQuery) || sup.includes(normalizedQuery);
+        });
       }
 
       let overdue = 0;
@@ -193,7 +208,7 @@
       today.setHours(0,0,0,0);
 
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:25px; color:#888;">No matching maintenance logs found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs found matching "${query}".</td></tr>`;
         document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
         document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
         document.getElementById('totalCount').innerText = `Total Records: 0`;
@@ -217,15 +232,17 @@
           alertBadge = `<span class="status-badge badge-ok">✅ OK (${daysDiff}d left)</span>`;
         }
 
+        const identifier = item.createdAt || item.timestamp || (item.systemId + "_" + item.maintenanceDate);
+
         const attachmentBtn = item.attachmentData 
-          ? `<button class="btn-action btn-view" onclick="viewAttachment('${item.createdAt}')">📎 View</button>`
+          ? `<button class="btn-action btn-view" onclick="viewAttachment('${identifier}')">📎 View</button>`
           : `<span style="color:#9e9e9e; font-size:12px;">No File</span>`;
 
         let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">View Only</span>`;
         if (isAdmin) {
           actionBtns = `
-            <button class="btn-action btn-edit" onclick="openEditModal('${item.createdAt}')">Edit</button>
-            <button class="btn-action btn-delete" onclick="deleteRecord('${item.createdAt}')">Delete</button>
+            <button class="btn-action btn-edit" onclick="openEditModal('${identifier}')">Edit</button>
+            <button class="btn-action btn-delete" onclick="deleteRecord('${identifier}')">Delete</button>
           `;
         }
 
@@ -253,19 +270,9 @@
       document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
     }
 
-    function applyFilter() {
-      const keyword = document.getElementById('filterInput').value.trim();
-      renderTable(keyword);
-    }
-
-    function clearFilter() {
-      document.getElementById('filterInput').value = "";
-      renderTable();
-    }
-
-    function viewAttachment(createdAt) {
+    function viewAttachment(identifier) {
       const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      const rec = records.find(r => r.createdAt === createdAt);
+      const rec = records.find(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) == identifier);
       if (!rec || !rec.attachmentData) return;
 
       const container = document.getElementById('attachmentContainer');
@@ -282,12 +289,12 @@
       document.getElementById('attachmentModal').style.display = 'block';
     }
 
-    function openEditModal(createdAt) {
+    function openEditModal(identifier) {
       const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      const rec = records.find(r => r.createdAt === createdAt);
+      const rec = records.find(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) == identifier);
       if (!rec) return;
 
-      document.getElementById('editOriginalId').value = rec.createdAt;
+      document.getElementById('editOriginalTimestamp').value = identifier;
       document.getElementById('editSystemId').value = rec.systemId || "";
       document.getElementById('editLocation').value = rec.location || "";
       document.getElementById('editSupervisor').value = rec.supervisor || "";
@@ -309,10 +316,10 @@
 
     document.getElementById('editForm').addEventListener('submit', function(e) {
       e.preventDefault();
-      const createdAt = document.getElementById('editOriginalId').value;
+      const identifier = document.getElementById('editOriginalTimestamp').value;
       let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
       
-      const targetIndex = records.findIndex(r => r.createdAt === createdAt);
+      const targetIndex = records.findIndex(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) == identifier);
 
       if (targetIndex !== -1) {
         records[targetIndex].location = document.getElementById('editLocation').value.trim();
@@ -325,16 +332,16 @@
 
         localStorage.setItem('maintenanceRecords', JSON.stringify(records));
         closeModal('editModal');
-        applyFilter();
+        executeSearch();
       }
     });
 
-    function deleteRecord(createdAt) {
+    function deleteRecord(identifier) {
       if (!confirm("Are you sure you want to permanently delete this maintenance entry?")) return;
       let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      records = records.filter(r => r.createdAt !== createdAt);
+      records = records.filter(r => (r.createdAt || r.timestamp || (r.systemId + "_" + r.maintenanceDate)) != identifier);
       localStorage.setItem('maintenanceRecords', JSON.stringify(records));
-      applyFilter();
+      executeSearch();
     }
 
     function switchAccount() {
