@@ -9,7 +9,7 @@
 <body>
   <div class="auth-container">
     <h2 style="margin-bottom: 10px;">Maintenance Auth</h2>
-    <p style="color: #607d8b; font-size: 14px; margin-bottom: 20px;">Enter credentials to proceed</p>
+    <p style="color: #607d8b; font-size: 14px; margin-bottom: 20px;">Enter credentials to access dedicated functions</p>
     
     <div id="errorMessage" class="error-message">Invalid Login ID or Password!</div>
 
@@ -28,7 +28,7 @@
     </form>
     
     <div style="margin-top: 20px;">
-      <a href="index.html" style="color: #1a237e; font-size: 13px; text-decoration: none;">← Back to Dashboard</a>
+      <a href="index.html" style="color: #1a237e; font-size: 13px; text-decoration: none;">← Back to Main Dashboard</a>
     </div>
   </div>
 
@@ -54,7 +54,7 @@
         sessionStorage.setItem('userRole', matched.role);
         
         const urlParams = new URLSearchParams(window.location.search);
-        const redirectUrl = urlParams.get('redirect') || 'form.html';
+        const redirectUrl = urlParams.get('redirect') || 'index.html';
         window.location.href = redirectUrl;
       } else {
         document.getElementById('errorMessage').style.display = 'block';

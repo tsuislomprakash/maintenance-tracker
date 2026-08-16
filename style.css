@@ -15,7 +15,7 @@ body {
   max-width: 1250px;
   margin: 0 auto;
   background: #ffffff;
-  padding: 30px;
+  padding: 25px;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
@@ -46,7 +46,6 @@ header {
   margin-bottom: 4px;
 }
 
-/* User Profile & Action Bar (Top Right Corner) */
 .user-controls {
   display: flex;
   align-items: center;
@@ -65,7 +64,7 @@ header {
 .nav-btn {
   background-color: #1a237e;
   color: #fff;
-  padding: 7px 14px;
+  padding: 8px 14px;
   border-radius: 4px;
   text-decoration: none;
   font-weight: 600;
@@ -90,10 +89,6 @@ header {
   font-weight: 600;
 }
 
-.btn-switch:hover {
-  background-color: #0277bd;
-}
-
 .btn-logout {
   background-color: #d32f2f;
   color: #fff;
@@ -103,10 +98,6 @@ header {
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
-}
-
-.btn-logout:hover {
-  background-color: #b71c1c;
 }
 
 .card-grid {
@@ -309,4 +300,13 @@ table th {
   font-weight: bold;
   cursor: pointer;
   color: #888;
+}
+
+/* Dedicated Panel Info Card */
+.device-header-card {
+  background: #e8eaf6;
+  border-left: 5px solid #1a237e;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
 }

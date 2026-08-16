@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fill Maintenance Form</title>
+  <title>Log Maintenance Entry</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Guard: Redirect to login if unauthenticated -->
+  <!-- Security Guard: Must be Logged In -->
   <script>
     if (sessionStorage.getItem('isLoggedIn') !== 'true') {
       window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
@@ -18,12 +18,11 @@
     <header>
       <div class="header-left">
         <h2>Log Maintenance Record</h2>
+        <small id="lockedNotice" style="color:#2e7d32; font-weight:bold;"></small>
       </div>
 
-      <!-- Top Right Corner Controls -->
       <div class="user-controls">
         <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
-        <a href="history.html" class="nav-btn" style="background:#546e7a;">History</a>
         <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
         <button onclick="logout()" class="btn-logout">Logout</button>
       </div>
@@ -32,27 +31,20 @@
     <form id="maintenanceForm">
       <div class="form-grid">
         
+        <!-- System ID field (Readonly if opened via Dedicated QR) -->
         <div class="form-group">
           <label for="systemId">System ID *</label>
-          <select id="systemId" required>
-            <option value="">-- Select Pre-defined ID --</option>
-            <option value="TS-DG-01">TS-DG-01</option>
-            <option value="TS-DG-02">TS-DG-02</option>
-            <option value="TS-SIG-01">TS-SIG-01</option>
-            <option value="TS-SIG-02">TS-SIG-02</option>
-            <option value="TS-AVA-01">TS-AVA-01</option>
-            <option value="TS-FL-01">TS-FL-01</option>
-          </select>
+          <input type="text" id="systemId" required style="font-weight:bold; background:#e8eaf6;">
         </div>
 
         <div class="form-group">
           <label for="department">Department *</label>
-          <input type="text" id="department" required>
+          <input type="text" id="department" placeholder="e.g., Electrical / Signaling" required>
         </div>
 
         <div class="form-group">
           <label for="location">Location *</label>
-          <input type="text" id="location" required>
+          <input type="text" id="location" placeholder="e.g., Gate 4 / Junction 2" required>
         </div>
 
         <div class="form-group">
@@ -64,7 +56,8 @@
           <label for="systemType">System Type *</label>
           <select id="systemType" required>
             <option value="">-- Select Type --</option>
-            <option value="Drop Gate">Drop Gate</option>
+            <option value="Automatic Drop Gate">Automatic Drop Gate</option>
+            <option value="Manual Drop Gate">Manual Drop Gate</option>
             <option value="Traffic Signal">Traffic Signal</option>
             <option value="AVA">AVA</option>
             <option value="Flickering Light">Flickering Light</option>
@@ -74,8 +67,7 @@
         <div class="form-group">
           <label for="maintenanceType">Type of Maintenance *</label>
           <select id="maintenanceType" required>
-            <option value="">-- Select Maintenance --</option>
-            <option value="Preventive">Preventive</option>
+            <option value="Preventive">Preventive (Routine)</option>
             <option value="Breakdown">Breakdown</option>
           </select>
         </div>
@@ -86,7 +78,7 @@
         </div>
 
         <div class="form-group">
-          <label for="nextDueDate">Next Due Date (Auto 15 Days) *</label>
+          <label for="nextDueDate">Next Due Date (Auto +15 Days) *</label>
           <input type="date" id="nextDueDate" required style="background:#f1f8e9; font-weight:bold;">
         </div>
 
@@ -110,7 +102,7 @@
 
         <div class="form-group full-width">
           <label for="issue">Issue (if any) *</label>
-          <textarea id="issue" rows="2" placeholder="Write 'None' if preventive" required></textarea>
+          <textarea id="issue" rows="2" placeholder="Enter 'Nil' or 'None' if normal preventive routine" required></textarea>
         </div>
 
         <div class="form-group full-width">
@@ -119,7 +111,7 @@
         </div>
 
         <div class="form-group full-width">
-          <label for="attachment">Attachment (Photo / Document)</label>
+          <label for="attachment">Attachment (Photo / Inspection Report)</label>
           <input type="file" id="attachment" accept="image/*,application/pdf">
         </div>
       </div>
@@ -129,11 +121,11 @@
   </div>
 
   <script>
-    const validSystemIDs = ["TS-DG-01", "TS-DG-02", "TS-SIG-01", "TS-SIG-02", "TS-AVA-01", "TS-FL-01"];
+    let dedicatedId = null;
 
     window.onload = function() {
       const user = sessionStorage.getItem('activeUser') || 'User';
-      const role = sessionStorage.getItem('userRole') || 'Member';
+      const role = sessionStorage.getItem('userRole') || 'Supervisor';
       document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
 
       const today = new Date().toISOString().split('T')[0];
@@ -141,9 +133,21 @@
       calculateNextDue(today);
 
       const urlParams = new URLSearchParams(window.location.search);
-      const scannedId = urlParams.get('id');
-      if (scannedId && validSystemIDs.includes(scannedId.toUpperCase())) {
-        document.getElementById('systemId').value = scannedId.toUpperCase();
+      dedicatedId = urlParams.get('id');
+
+      if (dedicatedId) {
+        const sysField = document.getElementById('systemId');
+        sysField.value = dedicatedId.toUpperCase();
+        sysField.readOnly = true;
+        document.getElementById('lockedNotice').innerText = `[Locked to Dedicated Unit: ${dedicatedId.toUpperCase()}]`;
+        
+        // Auto-select dropdown type based on prefix
+        const prefix = dedicatedId.substring(0, 3).toUpperCase();
+        if (dedicatedId.includes("ADG")) document.getElementById('systemType').value = "Automatic Drop Gate";
+        else if (dedicatedId.includes("MDG")) document.getElementById('systemType').value = "Manual Drop Gate";
+        else if (dedicatedId.includes("SIG")) document.getElementById('systemType').value = "Traffic Signal";
+        else if (dedicatedId.includes("AVA")) document.getElementById('systemType').value = "AVA";
+        else if (dedicatedId.includes("FL")) document.getElementById('systemType').value = "Flickering Light";
       }
     };
 
@@ -156,7 +160,7 @@
 
     function switchAccount() {
       sessionStorage.clear();
-      window.location.href = 'login.html';
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
     }
 
     function logout() {
@@ -177,13 +181,13 @@
     document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
 
-      const selectedId = document.getElementById('systemId').value;
+      const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
       const fileInput = document.getElementById('attachment');
       let base64File = null;
 
       if (fileInput.files.length > 0) {
         if (fileInput.files[0].size > 2 * 1024 * 1024) {
-          alert("File size is greater than 2MB. Please upload a smaller image/file.");
+          alert("File is larger than 2MB. Please upload a smaller compressed image/file.");
           return;
         }
         base64File = await fileToBase64(fileInput.files[0]);
@@ -213,7 +217,12 @@
       localStorage.setItem('maintenanceRecords', JSON.stringify(records));
 
       alert("✅ Maintenance Entry Successfully Submitted!");
-      window.location.href = "history.html";
+      
+      if (dedicatedId) {
+        window.location.href = `history.html?id=${dedicatedId}`;
+      } else {
+        window.location.href = "history.html";
+      }
     });
   </script>
 </body>

@@ -3,54 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Panel QR Code Generator</title>
+  <title>84 Control Panel QR Stickers</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Lightweight QR Code Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     .qr-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 20px;
+      gap: 15px;
       margin-top: 25px;
     }
     .sticker-card {
       border: 2px dashed #1a237e;
       background: #ffffff;
-      padding: 15px;
+      padding: 12px;
       text-align: center;
-      border-radius: 8px;
+      border-radius: 6px;
       page-break-inside: avoid;
     }
     .sticker-header {
-      font-size: 14px;
+      font-size: 12px;
       font-weight: bold;
       color: #1a237e;
       margin-bottom: 4px;
-      text-transform: uppercase;
     }
     .sticker-sub {
       font-size: 11px;
-      color: #555;
-      margin-bottom: 12px;
+      color: #333;
+      margin-bottom: 8px;
     }
     .qr-box {
       display: flex;
       justify-content: center;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .sticker-footer {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: bold;
       color: #d32f2f;
-      margin-top: 6px;
     }
     @media print {
       body { background: #fff; padding: 0; }
       .container { box-shadow: none; max-width: 100%; padding: 0; }
       header, .no-print { display: none !important; }
-      .qr-grid { grid-template-columns: repeat(3, 1fr); gap: 15px; }
-      .sticker-card { border: 1px solid #333; }
+      .qr-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .sticker-card { border: 1px solid #000; }
     }
   </style>
 </head>
@@ -58,8 +55,8 @@
   <div class="container">
     <header>
       <div class="header-left">
-        <h2>QR Code Generator for Control Panels</h2>
-        <small style="color:#607d8b;">Generate, download, or print stickers directly.</small>
+        <h2>Dedicated QR Generator (84 Equipment Network)</h2>
+        <small style="color:#607d8b;">Automatic Drop Gates (14) | Manual Drop Gates (15) | Signals (9) | AVA (31) | Flickering Lights (15)</small>
       </div>
       <div>
         <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
@@ -67,66 +64,77 @@
     </header>
 
     <div class="no-print" style="background: #e8eaf6; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-      <label for="baseUrl"><strong>Live Website Base URL:</strong></label>
-      <input type="text" id="baseUrl" placeholder="e.g., https://maint-track-uisl.netlify.app" style="margin-top:5px;">
-      <div style="margin-top: 10px; display:flex; gap:10px;">
-        <button onclick="generateAllQRs()" class="submit-btn" style="margin-top:0; padding:8px 16px;">Generate All Stickers</button>
-        <button onclick="window.print()" class="nav-btn" style="background:#2e7d32;">🖨️ Print All Stickers</button>
+      <label for="baseUrl"><strong>Live GitHub Pages URL:</strong></label>
+      <input type="text" id="baseUrl" placeholder="https://your-user.github.io/maintenance-tracker" style="margin-top:5px;">
+      <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button onclick="generateAll84QRs()" class="submit-btn" style="margin-top:0; padding:8px 16px;">Regenerate All 84 Stickers</button>
+        <button onclick="window.print()" class="nav-btn" style="background:#2e7d32;">🖨️ Print All Stickers (3-per-row)</button>
       </div>
     </div>
 
-    <div class="qr-grid" id="qrGrid">
-      <!-- Stickers injected via JavaScript -->
-    </div>
+    <div class="qr-grid" id="qrGrid"></div>
   </div>
 
   <script>
-    // System Master List
-    const systemsList = [
-      { id: "TS-DG-01", type: "Drop Gate", location: "Gate 1 North" },
-      { id: "TS-DG-02", type: "Drop Gate", location: "Gate 2 South" },
-      { id: "TS-SIG-01", type: "Traffic Signal", location: "Main Crossing" },
-      { id: "TS-SIG-02", type: "Traffic Signal", location: "Junction 4" },
-      { id: "TS-AVA-01", type: "AVA System", location: "Signal Point A" },
-      { id: "TS-FL-01", type: "Flickering Light", location: "Hazard Zone B" }
-    ];
+    // Master Array for 84 Unique Equipment Panels
+    function buildMaster84List() {
+      const list = [];
+      // 1. Automatic Drop Gates (14)
+      for (let i = 1; i <= 14; i++) {
+        list.push({ id: `ADG-${i.toString().padStart(2, '0')}`, name: `Auto Drop Gate #${i}` });
+      }
+      // 2. Manual Drop Gates (15)
+      for (let i = 1; i <= 15; i++) {
+        list.push({ id: `MDG-${i.toString().padStart(2, '0')}`, name: `Manual Drop Gate #${i}` });
+      }
+      // 3. Traffic Signals (9)
+      for (let i = 1; i <= 9; i++) {
+        list.push({ id: `SIG-${i.toString().padStart(2, '0')}`, name: `Traffic Signal #${i}` });
+      }
+      // 4. AVA Systems (31)
+      for (let i = 1; i <= 31; i++) {
+        list.push({ id: `AVA-${i.toString().padStart(2, '0')}`, name: `AVA System #${i}` });
+      }
+      // 5. Flickering Lights (15)
+      for (let i = 1; i <= 15; i++) {
+        list.push({ id: `FL-${i.toString().padStart(2, '0')}`, name: `Flickering Light #${i}` });
+      }
+      return list;
+    }
+
+    const masterEquipment = buildMaster84List();
 
     window.onload = function() {
-      // Default to current local domain or origin
       document.getElementById('baseUrl').value = window.location.origin + window.location.pathname.replace('qr-generator.html', '');
-      generateAllQRs();
+      generateAll84QRs();
     };
 
-    function generateAllQRs() {
+    function generateAll84QRs() {
       let baseUrl = document.getElementById('baseUrl').value.trim();
-      if (baseUrl.endsWith('/')) {
-        baseUrl = baseUrl.slice(0, -1);
-      }
+      if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
 
       const grid = document.getElementById('qrGrid');
       grid.innerHTML = "";
 
-      systemsList.forEach(sys => {
-        // Direct link to form with system ID parameter
-        const targetUrl = `${baseUrl}/form.html?id=${sys.id}`;
+      masterEquipment.forEach(item => {
+        const dedicatedUrl = `${baseUrl}/device.html?id=${item.id}`;
 
         const card = document.createElement('div');
         card.className = 'sticker-card';
 
         card.innerHTML = `
-          <div class="sticker-header">EQUIPMENT MAINTENANCE</div>
-          <div class="sticker-sub"><strong>ID:</strong> ${sys.id} | ${sys.type}<br><strong>Loc:</strong> ${sys.location}</div>
-          <div class="qr-box" id="qr-${sys.id}"></div>
-          <div class="sticker-footer">SCAN TO LOG / VIEW 15-DAY ROUTINE</div>
+          <div class="sticker-header">FIELD EQUIPMENT CONTROL</div>
+          <div class="sticker-sub"><strong>${item.id}</strong> | ${item.name}</div>
+          <div class="qr-box" id="qr-${item.id}"></div>
+          <div class="sticker-footer">SCAN FOR DEDICATED 15-DAY ROUTINE</div>
         `;
 
         grid.appendChild(card);
 
-        // Generate QR code graphic
-        new QRCode(document.getElementById(`qr-${sys.id}`), {
-          text: targetUrl,
-          width: 130,
-          height: 130,
+        new QRCode(document.getElementById(`qr-${item.id}`), {
+          text: dedicatedUrl,
+          width: 120,
+          height: 120,
           colorDark : "#000000",
           colorLight : "#ffffff",
           correctLevel : QRCode.CorrectLevel.H

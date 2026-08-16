@@ -10,19 +10,24 @@
   <div class="container">
     <header>
       <div class="header-left">
-        <h2>Maintenance History & Tracker</h2>
+        <h2 id="pageHeading">Maintenance History & Tracker</h2>
+        <small id="subHeading" style="color:#546e7a;"></small>
       </div>
 
-      <!-- Top Right Corner Controls -->
-      <div id="authHeader" class="user-controls">
-        <!-- Managed dynamically by JS -->
-      </div>
+      <div id="authHeader" class="user-controls"></div>
     </header>
 
     <div class="alert-summary">
       <div class="alert-card badge-critical" id="overdueCount">Critical Overdue: 0</div>
       <div class="alert-card badge-due-soon" id="upcomingCount">Due Soon (Next 3 Days): 0</div>
       <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
+    </div>
+
+    <!-- Admin Master Filter Controls -->
+    <div id="adminFilterBox" style="display:none; background:#e8eaf6; padding:12px; border-radius:6px; margin-bottom:15px; gap:10px; align-items:center; flex-wrap:wrap;">
+      <label><strong>Filter System ID:</strong></label>
+      <input type="text" id="filterInput" placeholder="e.g. ADG-01, SIG-05" onkeyup="filterTable()" style="max-width:200px; padding:6px;">
+      <button onclick="clearFilter()" class="nav-btn" style="padding:6px 12px; background:#546e7a;">Clear Filter</button>
     </div>
 
     <div class="table-container">
@@ -43,9 +48,7 @@
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="tableBody">
-          <!-- Dynamically Loaded -->
-        </tbody>
+        <tbody id="tableBody"></tbody>
       </table>
     </div>
   </div>
@@ -69,7 +72,7 @@
 
         <div class="form-group">
           <label>System ID</label>
-          <input type="text" id="editSystemId" readonly style="background:#eceff1; cursor:not-allowed;">
+          <input type="text" id="editSystemId" readonly style="background:#eceff1;">
         </div>
 
         <div class="form-group">
@@ -116,7 +119,29 @@
   </div>
 
   <script>
+    let dedicatedId = null;
+
     window.onload = function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      dedicatedId = urlParams.get('id');
+
+      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+
+      if (dedicatedId) {
+        document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
+        document.getElementById('subHeading').innerText = `Showing exclusive maintenance timeline for ${dedicatedId.toUpperCase()}`;
+      } else {
+        if (!isAdmin) {
+          // If non-admin tries to view global history without ID, redirect to home or ask to login
+          alert("General history is restricted. Please scan a dedicated QR or Login as Admin.");
+          window.location.href = "login.html?redirect=history.html";
+          return;
+        }
+        document.getElementById('pageHeading').innerText = `Master Maintenance History (All Units)`;
+        document.getElementById('subHeading').innerText = `Admin Access: Viewing records across all 84 field units.`;
+        document.getElementById('adminFilterBox').style.display = 'flex';
+      }
+
       renderUserControls();
       loadHistory();
     };
@@ -127,38 +152,43 @@
       const user = sessionStorage.getItem('activeUser');
       const role = sessionStorage.getItem('userRole');
 
+      let newBtnUrl = dedicatedId ? `form.html?id=${dedicatedId}` : 'form.html';
+
       if (isLoggedIn) {
         authBox.innerHTML = `
           <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
-          <a href="form.html" class="nav-btn">+ New Entry</a>
-          <button onclick="switchAccount()" class="btn-switch">Switch Account</button>
+          <a href="${newBtnUrl}" class="nav-btn">+ New Entry</a>
+          <button onclick="switchAccount()" class="btn-switch">Switch</button>
           <button onclick="logout()" class="btn-logout">Logout</button>
         `;
       } else {
         authBox.innerHTML = `
-          <a href="login.html" class="nav-btn">Login</a>
-          <a href="index.html" class="nav-btn" style="background:#546e7a;">Dashboard</a>
+          <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>
+          <a href="index.html" class="nav-btn" style="background:#546e7a;">Home</a>
         `;
       }
     }
 
     function switchAccount() {
       sessionStorage.clear();
-      window.location.href = 'login.html';
+      window.location.href = `login.html?redirect=${encodeURIComponent(window.location.href)}`;
     }
 
     function logout() {
       sessionStorage.clear();
-      renderUserControls();
-      loadHistory();
-      alert("Logged out successfully.");
+      window.location.reload();
     }
 
     function loadHistory() {
-      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
       const tableBody = document.getElementById('tableBody');
       const isAdmin = sessionStorage.getItem('userRole') === 'admin';
       tableBody.innerHTML = "";
+
+      // Dedicated Filter: If opened via QR, show ONLY this system ID
+      if (dedicatedId) {
+        records = records.filter(r => r.systemId.toUpperCase() === dedicatedId.toUpperCase());
+      }
 
       let overdue = 0;
       let upcoming = 0;
@@ -166,7 +196,7 @@
       today.setHours(0,0,0,0);
 
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:20px; color:#888;">No maintenance records logged yet.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:25px; color:#888;">No maintenance logs recorded for this selection.</td></tr>`;
         document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
         document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
         document.getElementById('totalCount').innerText = `Total Records: 0`;
@@ -226,8 +256,24 @@
       document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
     }
 
+    function filterTable() {
+      const query = document.getElementById('filterInput').value.toUpperCase();
+      const rows = document.querySelectorAll("#tableBody tr");
+      rows.forEach(row => {
+        const text = row.innerText.toUpperCase();
+        row.style.display = text.includes(query) ? "" : "none";
+      });
+    }
+
+    function clearFilter() {
+      document.getElementById('filterInput').value = "";
+      filterTable();
+    }
+
     function viewAttachment(index) {
-      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      if (dedicatedId) records = records.filter(r => r.systemId.toUpperCase() === dedicatedId.toUpperCase());
+
       const rec = records[index];
       if (!rec || !rec.attachmentData) return;
 
@@ -246,7 +292,8 @@
     }
 
     function openEditModal(index) {
-      const records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
+      if (dedicatedId) records = records.filter(r => r.systemId.toUpperCase() === dedicatedId.toUpperCase());
       const rec = records[index];
       if (!rec) return;
 
@@ -275,14 +322,20 @@
       const index = parseInt(document.getElementById('editIndex').value, 10);
       let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
       
-      if (records[index]) {
-        records[index].location = document.getElementById('editLocation').value.trim();
-        records[index].supervisor = document.getElementById('editSupervisor').value.trim();
-        records[index].maintenanceDate = document.getElementById('editMaintDate').value;
-        records[index].nextDueDate = document.getElementById('editDueDate').value;
-        records[index].issue = document.getElementById('editIssue').value.trim();
-        records[index].actionTaken = document.getElementById('editAction').value.trim();
-        records[index].status = document.getElementById('editStatus').value;
+      let targetIndex = index;
+      if (dedicatedId) {
+        const currentItem = records.filter(r => r.systemId.toUpperCase() === dedicatedId.toUpperCase())[index];
+        targetIndex = records.indexOf(currentItem);
+      }
+
+      if (records[targetIndex]) {
+        records[targetIndex].location = document.getElementById('editLocation').value.trim();
+        records[targetIndex].supervisor = document.getElementById('editSupervisor').value.trim();
+        records[targetIndex].maintenanceDate = document.getElementById('editMaintDate').value;
+        records[targetIndex].nextDueDate = document.getElementById('editDueDate').value;
+        records[targetIndex].issue = document.getElementById('editIssue').value.trim();
+        records[targetIndex].actionTaken = document.getElementById('editAction').value.trim();
+        records[targetIndex].status = document.getElementById('editStatus').value;
 
         localStorage.setItem('maintenanceRecords', JSON.stringify(records));
         closeModal('editModal');
@@ -293,7 +346,14 @@
     function deleteRecord(index) {
       if (!confirm("Are you sure you want to permanently delete this maintenance entry?")) return;
       let records = JSON.parse(localStorage.getItem('maintenanceRecords')) || [];
-      records.splice(index, 1);
+      
+      if (dedicatedId) {
+        const currentItem = records.filter(r => r.systemId.toUpperCase() === dedicatedId.toUpperCase())[index];
+        records = records.filter(r => r !== currentItem);
+      } else {
+        records.splice(index, 1);
+      }
+
       localStorage.setItem('maintenanceRecords', JSON.stringify(records));
       loadHistory();
     }
