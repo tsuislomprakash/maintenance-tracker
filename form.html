@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log Maintenance Entry (Audit Timestamped)</title>
+  <title>Log Maintenance Entry (Audit Timestamped & Geo-Fenced)</title>
   <link rel="stylesheet" href="style.css">
   
   <!-- Firebase SDKs -->
@@ -41,7 +41,7 @@
         
         <div class="form-group">
           <label for="systemId">System ID *</label>
-          <input type="text" id="systemId" placeholder="e.g. ADG-01, SIG-01" required style="font-weight:bold; background:#e8eaf6;">
+          <input type="text" id="systemId" placeholder="e.g. ADG-01, ADG-14, SIG-01" required style="font-weight:bold; background:#e8eaf6;">
         </div>
 
         <div class="form-group">
@@ -143,8 +143,12 @@
   </div>
 
   <script>
+    // =========================================================================
+    // REGISTERED CONTROL PANEL LOCATIONS (50m GEO-FENCE TARGETS)
+    // =========================================================================
     const REGISTERED_LOCATIONS = {
-      "ADG-01": { lat: 22.758222, lng: 86.190747 }
+      "ADG-01": { lat: 22.758222, lng: 86.190747 },
+      "ADG-14": { lat: 22.796772, lng: 86.189284 }
     };
 
     const GEO_FENCE_TOLERANCE_METERS = 50;
@@ -286,7 +290,6 @@
       btn.innerText = "Verifying & Stamping Exact Timestamp...";
       btn.disabled = true;
 
-      // CAPTURE UNALTERABLE EXACT SYSTEM TIME AT CLICK INSTANT
       const exactSubmissionDate = new Date();
       const actualSubmitDateStr = exactSubmissionDate.toISOString().split('T')[0];
       const actualSubmitTimeStr = exactSubmissionDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
@@ -339,15 +342,10 @@
         supervisor: document.getElementById('supervisor').value.trim(),
         systemType: document.getElementById('systemType').value,
         maintenanceType: document.getElementById('maintenanceType').value,
-        
-        // 1. Supervisor Entered Declared Time
         maintenanceDate: document.getElementById('maintenanceDate').value,
         maintenanceTime: document.getElementById('maintenanceTime').value,
-        
-        // 2. Unalterable Real System Time Audit Stamp
         actualSubmitDate: actualSubmitDateStr,
         actualSubmitTime: actualSubmitTimeStr,
-        
         nextDueDate: document.getElementById('nextDueDate').value,
         priority: document.getElementById('priority').value,
         status: document.getElementById('status').value,
