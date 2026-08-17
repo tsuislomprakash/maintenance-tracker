@@ -6,7 +6,6 @@
   <title>Central Maintenance Management Dashboard</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- Security Gate: Must be logged in to view Central Dashboard -->
   <script>
     if (sessionStorage.getItem('isLoggedIn') !== 'true') {
       window.location.href = 'login.html?redirect=index.html';
@@ -23,7 +22,7 @@
     <header>
       <div class="header-left">
         <h1>Central Agency Management Dashboard</h1>
-        <small style="color: #607d8b;">Restricted Network: <strong>84 Field Units Monitoring</strong></small>
+        <small style="color: #607d8b;">Restricted Network: <strong>84 Field Units & Signal Stock Monitoring</strong></small>
       </div>
 
       <div id="authHeader" class="user-controls"></div>
@@ -38,28 +37,36 @@
         <a href="planner.html" class="nav-btn" style="background:#e65100;">Open Maintenance Plan</a>
       </div>
 
-      <!-- 2. Team Duty Attendance Card -->
+      <!-- 2. Signal System Stock Portal Card (NEW) -->
+      <div class="card" style="border: 2px solid #00838f; background: #e0f7fa;">
+        <span id="stockReqBadge" class="counter-badge">0</span>
+        <h3 style="color:#00838f;">Signal System Stock</h3>
+        <p>90 Items Inventory, Requisitions, Admin Approvals, Vendor Inward & Defective Ledger.</p>
+        <a href="stock.html" class="nav-btn" style="background:#00838f;">Open Stock Portal</a>
+      </div>
+
+      <!-- 3. Team Duty Attendance Card -->
       <div class="card" style="border: 2px solid #2e7d32; background: #e8f5e9;">
         <h3 style="color:#2e7d32;">Team Duty Attendance</h3>
         <p>Log daily shift attendance, duty areas, view history & export Excel roster report.</p>
         <a href="attendance.html" class="nav-btn" style="background:#2e7d32;">Open Attendance Portal</a>
       </div>
 
-      <!-- 3. Form Fill Card -->
+      <!-- 4. Form Fill Card -->
       <div class="card">
         <h3>Fill Maintenance Log</h3>
-        <p>Log a 15-day routine or breakdown service with GPS audit stamping.</p>
+        <p>Log a 15-day routine or breakdown service with 50m Geo-Verification.</p>
         <a href="form.html" class="nav-btn">Open Maintenance Form</a>
       </div>
 
-      <!-- 4. History Card -->
+      <!-- 5. History Card -->
       <div class="card">
         <h3>View Maintenance History</h3>
         <p>Master records, search system ID, Excel download & overdue audit alerts.</p>
         <a href="history.html" class="nav-btn" style="background:#37474f;">Open All Records</a>
       </div>
 
-      <!-- 5. QR Generator Card (Admin Only) -->
+      <!-- 6. QR Generator Card (Admin Only) -->
       <div class="card" id="adminQrCard" style="display: none; border: 2px solid #00796b; background: #e0f2f1;">
         <h3 style="color:#00796b;">QR Generator for Panels</h3>
         <p>Admin Tool: Generate & Print dedicated QR code stickers for all 84 control panels.</p>
@@ -98,6 +105,7 @@
     window.onload = function() {
       renderUserControls();
       listenActivePlans();
+      listenPendingStockRequests();
       renderAnalyticsCharts();
     };
 
@@ -130,6 +138,20 @@
       db.collection("maintenance_plans").where("status", "==", "PENDING").onSnapshot(snapshot => {
         const count = snapshot.size;
         const badge = document.getElementById('planCountBadge');
+        if (count > 0) {
+          badge.innerText = count;
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      });
+    }
+
+    // Realtime Requisition Alert Badge on Dashboard
+    function listenPendingStockRequests() {
+      db.collection("signal_requisitions").where("status", "==", "PENDING_APPROVAL").onSnapshot(snapshot => {
+        const count = snapshot.size;
+        const badge = document.getElementById('stockReqBadge');
         if (count > 0) {
           badge.innerText = count;
           badge.style.display = "inline-block";
