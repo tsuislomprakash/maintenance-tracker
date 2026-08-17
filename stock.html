@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal System Stock & Inventory Management</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase & SheetJS (Excel Engine) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    .tab-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #cfd8dc;
+      padding-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      background: #eceff1;
+      color: #37474f;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 13px;
+      transition: 0.2s;
+    }
+    .tab-btn.active {
+      background: #1a237e;
+      color: #ffffff;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    .stock-badge-low {
+      background-color: #ffebee;
+      color: #c62828;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .stock-badge-ok {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Security Check -->
+  <script>
+    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
+    }
+  </script>
+
+  <div class="container">
+    <header>
+      <div class="header-left">
+        <h2>Signal System Inventory & Spare Management</h2>
+        <small style="color:#607d8b;">Balance Stock, Requisition Approval & Challan Inward Tracking</small>
+      </div>
+
+      <div class="user-controls">
+        <span class="user-badge-info">👤 <strong id="userDisplay"></strong></span>
+        <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
+        <button onclick="switchAccount()" class="btn-switch">Switch</button>
+        <button onclick="logout()" class="btn-logout">Logout</button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('tabInventory')">📦 Live Balance Stock (90 Items)</button>
+      <button class="tab-btn" onclick="switchTab('tabRequisition')">📝 Material Requisition & Approvals <span id="pendingReqBadge" class="counter-badge" style="position:static; margin-left:5px;">0</span></button>
+      <button class="tab-btn" id="inwardTabBtn" style="display:none;" onclick="switchTab('tabInward')">📥 Vendor Inward Entry (Admin)</button>
+      <button class="tab-btn" onclick="switchTab('tabDefective')">⚠️ Defective / Replaced Items Ledger</button>
+    </div>
+
+    <!-- TAB 1: LIVE INVENTORY BALANCE -->
+    <div id="tabInventory" class="tab-content active">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+        <input type="text" id="stockSearchInput" placeholder="Search Material Name (e.g., Light, Relay, Card, SMPS)" oninput="filterStockTable()" style="max-width:320px; padding:9px;">
+        <div>
+          <button type="button" onclick="exportStockExcel()" class="btn-action btn-excel" style="padding:9px 16px;">📊 Export Balance Stock (.xlsx)</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Sr.</th>
+              <th>Material Description</th>
+              <th>UoM</th>
+              <th>Balance Stock</th>
+              <th>Status</th>
+              <th>Available Serial Numbers</th>
+            </tr>
+          </thead>
+          <tbody id="stockTableBody">
+            <tr><td colspan="6" style="text-align:center; padding:20px;">Loading Inventory Database...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 2: MATERIAL REQUISITION & APPROVAL -->
+    <div id="tabRequisition" class="tab-content">
+      <!-- Supervisor Request Box -->
+      <div style="background:#e8eaf6; border:1px solid #c5cae9; padding:20px; border-radius:8px; margin-bottom:25px;">
+        <h3 style="color:#1a237e; margin-bottom:15px;">+ Raise Material Requisition for Replacement</h3>
+        <form id="requisitionForm">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="reqMaterial">Select Material *</label>
+              <select id="reqMaterial" required onchange="loadAvailableSerialsForSelect(this.value)">
+                <option value="">-- Choose Stock Item --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="reqSerial">Select Available Serial / Part # *</label>
+              <select id="reqSerial" required>
+                <option value="">-- Select Available Serial --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="reqQty">Quantity Required *</label>
+              <input type="number" id="reqQty" value="1" min="1" required readonly style="background:#eceff1;">
+            </div>
+
+            <div class="form-group">
+              <label for="reqDate">Date of Issue / Replacement *</label>
+              <input type="date" id="reqDate" required>
+            </div>
+
+            <div class="form-group">
+              <label for="reqLocation">Target Location / Gate *</label>
+              <input type="text" id="reqLocation" placeholder="e.g. ADG-01, Gate 4, Signal Post 2" required>
+            </div>
+
+            <div class="form-group">
+              <label for="reqSide">Location Side / Arm Position *</label>
+              <select id="reqSide" required>
+                <option value="Inward Side">Inward Side</option>
+                <option value="Outward Side">Outward Side</option>
+                <option value="North Arm">North Arm</option>
+                <option value="South Arm">South Arm</option>
+                <option value="East Post">East Post</option>
+                <option value="West Post">West Post</option>
+                <option value="Main Control Hub">Main Control Hub</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="faultyName">Faulty / Defective Item Description *</label>
+              <input type="text" id="faultyName" placeholder="e.g. Burned Flasher Card, Defective 24V Relay" required>
+            </div>
+
+            <div class="form-group">
+              <label for="faultySerial">Faulty Item Serial / Part # (if visible)</label>
+              <input type="text" id="faultySerial" placeholder="e.g. OLD-CARD-992 or Unmarked">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="reqRemarks">Reason for Replacement / Remarks *</label>
+              <textarea id="reqRemarks" rows="2" placeholder="Describe the fault observed (e.g. No output voltage, LED array damaged during thunderstorm)" required></textarea>
+            </div>
+          </div>
+
+          <button type="submit" id="reqSubmitBtn" class="submit-btn" style="width:100%; margin-top:10px;">Submit Requisition for Admin Approval</button>
+        </form>
+      </div>
+
+      <h3 style="margin-bottom:15px; color:#1a237e;">Requisition Logs & Admin Approvals</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Material</th>
+              <th>Issued Serial #</th>
+              <th>Date</th>
+              <th>Target Location & Side</th>
+              <th>Faulty Item Replaced</th>
+              <th>Requested By</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="requisitionTableBody">
+            <tr><td colspan="9" style="text-align:center; padding:20px;">Fetching Requisition Logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 3: VENDOR INWARD ENTRY (ADMIN ONLY) -->
+    <div id="tabInward" class="tab-content">
+      <div style="background:#fff3e0; border:1px solid #ffe0b2; padding:20px; border-radius:8px; margin-bottom:25px;">
+        <h3 style="color:#e65100; margin-bottom:15px;">📥 Vendor Inward Stock & Challan Receipt (Auto Serial Generator)</h3>
+        <form id="inwardForm">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="inwardVendor">Vendor / Supplier Name *</label>
+              <input type="text" id="inwardVendor" placeholder="e.g. Virtual Controls, Tata Steel UISL, Schneider" required>
+            </div>
+
+            <div class="form-group">
+              <label for="inwardChallan">Challan / Invoice Number *</label>
+              <input type="text" id="inwardChallan" placeholder="e.g. CH-2026-9041" required>
+            </div>
+
+            <div class="form-group">
+              <label for="inwardDate">Received Date *</label>
+              <input type="date" id="inwardDate" required>
+            </div>
+
+            <div class="form-group">
+              <label for="inwardMaterial">Select Material Description *</label>
+              <select id="inwardMaterial" required>
+                <option value="">-- Choose Stock Item --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="inwardQty">Quantity Supplied *</label>
+              <input type="number" id="inwardQty" min="1" value="1" required oninput="previewGeneratedSerials()">
+            </div>
+
+            <div class="form-group">
+              <label for="inwardPrefix">Serial Number Prefix</label>
+              <input type="text" id="inwardPrefix" placeholder="e.g. VIRTUAL_CARD" oninput="previewGeneratedSerials()">
+            </div>
+
+            <div class="form-group full-width">
+              <label>Generated Ascending Serial Numbers Preview:</label>
+              <div id="serialPreviewBox" style="background:#fff; border:1px dashed #e65100; padding:10px; border-radius:4px; font-weight:bold; color:#e65100; min-height:38px;">
+                Prefix_01 to Prefix_01
+              </div>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="inwardRemarks">Receiving Remarks / Inspector</label>
+              <textarea id="inwardRemarks" rows="2" placeholder="e.g. Inspected against PO-7721, testing passed"></textarea>
+            </div>
+          </div>
+
+          <button type="submit" id="inwardSubmitBtn" class="submit-btn" style="background:#e65100; width:100%; margin-top:10px;">Receive Stock & Append Serial Numbers</button>
+        </form>
+      </div>
+
+      <h3 style="margin-bottom:15px; color:#1a237e;">Vendor Inward History</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date</th>
+              <th>Vendor</th>
+              <th>Challan #</th>
+              <th>Material</th>
+              <th>Qty Added</th>
+              <th>Assigned Serial Range</th>
+              <th>Received By</th>
+            </tr>
+          </thead>
+          <tbody id="inwardTableBody">
+            <tr><td colspan="8" style="text-align:center; padding:20px;">Fetching inward records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 4: DEFECTIVE / REPLACED ITEMS LEDGER -->
+    <div id="tabDefective" class="tab-content">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+        <h3 style="color:#c62828;">Defective / Scrapped Field Items Log</h3>
+        <button type="button" onclick="exportDefectiveExcel()" class="btn-action btn-excel" style="padding:9px 16px;">📊 Export Defective Ledger (.xlsx)</button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date Replaced</th>
+              <th>Faulty Item Name</th>
+              <th>Faulty Serial #</th>
+              <th>Removed From Location</th>
+              <th>Position / Side</th>
+              <th>Replacement Unit Issued</th>
+              <th>Fault Description</th>
+              <th>Replaced By</th>
+            </tr>
+          </thead>
+          <tbody id="defectiveTableBody">
+            <tr><td colspan="9" style="text-align:center; padding:20px;">Fetching Defective Logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // 90 PRE-LOADED SIGNAL SYSTEM ITEMS (FROM YOUR EXCEL FILE)
+    // =========================================================================
+    const INITIAL_90_ITEMS = [
+      { id: 1, name: '12" Light 220 Volt with case (RED)', uom: 'Nos.', stock: 12 },
+      { id: 2, name: '12" Light 220 Volt with case (YELLOW)', uom: 'Nos.', stock: 13 },
+      { id: 3, name: '12" Light 220VAC with case (GREEN)', uom: 'Nos.', stock: 4 },
+      { id: 4, name: '12" Light 220VAC with case (ARROW)', uom: 'Nos.', stock: 5 },
+      { id: 5, name: '12" card 220VAC (RED)', uom: 'Nos.', stock: 2 },
+      { id: 6, name: '12" card 220VAC (YELLOW)', uom: 'Nos.', stock: 3 },
+      { id: 7, name: '12" card 220VAC (GREEN)', uom: 'Nos.', stock: 0 },
+      { id: 8, name: '12" card 220VAC (ARROW)', uom: 'Nos.', stock: 3 },
+      { id: 9, name: '8" Light 220VAC with case (RED)', uom: 'Nos.', stock: 0 },
+      { id: 10, name: '8" Light 220VAC with case (YELLOW)', uom: 'Nos.', stock: 7 },
+      { id: 11, name: '8" Light 220VAC with case (GREEN)', uom: 'Nos.', stock: 0 },
+      { id: 12, name: '8" Light 220VAC with case (ARROW)', uom: 'Nos.', stock: 3 },
+      { id: 13, name: '8" card 220VAC (RED)', uom: 'Nos.', stock: 0 },
+      { id: 14, name: '8" card 220VAC (YELLOW)', uom: 'Nos.', stock: 6 },
+      { id: 15, name: '8" card 220VAC (GREEN)', uom: 'Nos.', stock: 3 },
+      { id: 16, name: '8" card 220VAC (ARROW)', uom: 'Nos.', stock: 0 },
+      { id: 17, name: '5 Aspect Light (12")', uom: 'Nos.', stock: 2 },
+      { id: 18, name: '5 Aspect Light (8")', uom: 'Nos.', stock: 1 },
+      { id: 19, name: 'Boom G-4000 (4M)', uom: 'Nos.', stock: 5 },
+      { id: 20, name: 'Boom G-6000 (3M)', uom: 'Nos.', stock: 6 },
+      { id: 21, name: 'Boom G-6000 (4M)', uom: 'Nos.', stock: 6 },
+      { id: 22, name: 'Boom 2" Round (4M)', uom: 'Nos.', stock: 3 },
+      { id: 23, name: 'BOOM JOINTER', uom: 'Nos.', stock: 2 },
+      { id: 24, name: 'Drop Gate G-4000', uom: 'Nos.', stock: 1 },
+      { id: 25, name: 'Drop Gate G-6000', uom: 'Nos.', stock: 2 },
+      { id: 26, name: 'Drop Gate Control card', uom: 'Nos.', stock: 6 },
+      { id: 27, name: 'Control Panel', uom: 'Nos.', stock: 1 },
+      { id: 28, name: 'Relay 24VAC', uom: 'Nos.', stock: 12 },
+      { id: 29, name: 'Relay 24VDC', uom: 'Nos.', stock: 2 },
+      { id: 30, name: 'Relay 240VAC', uom: 'Nos.', stock: 3 },
+      { id: 31, name: 'RELAY 2CO 24VDC With Base', uom: 'Nos.', stock: 13 },
+      { id: 32, name: 'RELAY 4CO 24VDC With Base', uom: 'Nos.', stock: 13 },
+      { id: 33, name: 'Relay Card 4C', uom: 'Nos.', stock: 4 },
+      { id: 34, name: 'Relay Card 8C', uom: 'Nos.', stock: 5 },
+      { id: 35, name: 'Cable 7C X 1.5 sqM', uom: 'Mtr.', stock: 1211 },
+      { id: 36, name: 'Cable 5 Core Flexible Cable', uom: 'Mtr.', stock: 134 },
+      { id: 37, name: 'Cable 3 Core Flexible Cable', uom: 'Mtr.', stock: 0 },
+      { id: 38, name: 'Signal Light Post (9\')', uom: 'Nos.', stock: 3 },
+      { id: 39, name: 'Sensor Post (6\')', uom: 'Nos.', stock: 0 },
+      { id: 40, name: 'SMPS 12VDC', uom: 'Nos.', stock: 4 },
+      { id: 41, name: 'SMPS 24VDC', uom: 'Nos.', stock: 10 },
+      { id: 42, name: 'Solar Panel with Mounting', uom: 'Nos.', stock: 12 },
+      { id: 43, name: 'STOP Light 24V', uom: 'Nos.', stock: 3 },
+      { id: 44, name: 'BURIED ZEBRA LIGHT', uom: 'Nos.', stock: 2 },
+      { id: 45, name: 'LED PEDESTRIAN LIGHT', uom: 'Nos.', stock: 1 },
+      { id: 46, name: 'PANEL LED INDICATOR', uom: 'Nos.', stock: 18 },
+      { id: 47, name: 'LED BASED SIGNAGE BOARD', uom: 'Nos.', stock: 8 },
+      { id: 48, name: 'Hooter AVA Set', uom: 'Nos.', stock: 1 },
+      { id: 49, name: 'Hooter Speaker', uom: 'Nos.', stock: 0 },
+      { id: 50, name: 'Countdown Timer', uom: 'Nos.', stock: 2 },
+      { id: 51, name: 'Pause Mode Timer', uom: 'Nos.', stock: 6 },
+      { id: 52, name: 'PLC 12DI 8DO', uom: 'Nos.', stock: 0 },
+      { id: 53, name: 'PLC 24DI 16DO (ST40)', uom: 'Nos.', stock: 1 },
+      { id: 54, name: 'PLC 36DI 24DO (ST60)', uom: 'Nos.', stock: 1 },
+      { id: 55, name: 'LOGO PLC', uom: 'Nos.', stock: 1 },
+      { id: 56, name: 'MAGNET', uom: 'Nos.', stock: 3 },
+      { id: 57, name: 'MAGNET SENSOR', uom: 'Nos.', stock: 1 },
+      { id: 58, name: 'JB (200 x 150 x 100)', uom: 'Nos.', stock: 2 },
+      { id: 59, name: 'NC ELEMENT', uom: 'Nos.', stock: 23 },
+      { id: 60, name: 'NO ELEMENT', uom: 'Nos.', stock: 8 },
+      { id: 61, name: 'RETRO REFLECTIVE SENSOR', uom: 'Nos.', stock: 0 },
+      { id: 62, name: 'THROUGH BEAM SENSOR', uom: 'Nos.', stock: 1 },
+      { id: 63, name: 'WHEEL COUNTING SENSOR', uom: 'Nos.', stock: 0 },
+      { id: 64, name: 'SAFETY SENSOR', uom: 'Nos.', stock: 0 },
+      { id: 65, name: 'SENSOR BASE', uom: 'Nos.', stock: 0 },
+      { id: 66, name: 'PUSH  BUTTON', uom: 'Nos.', stock: 0 },
+      { id: 67, name: '3 WAY PUSH BUTTON', uom: 'Nos.', stock: 2 },
+      { id: 68, name: 'BATTERY', uom: 'Nos.', stock: 0 },
+      { id: 69, name: 'RCBO 16 Amp., 30mA', uom: 'Nos.', stock: 4 },
+      { id: 70, name: 'FLASHER CARD', uom: 'Nos.', stock: 14 },
+      { id: 71, name: 'FLEXIBLE CONDUIT', uom: 'Nos.', stock: 0 },
+      { id: 72, name: 'PVC TAPE', uom: 'Nos.', stock: 300 },
+      { id: 73, name: '100mm PVC CABLE TIE', uom: 'Nos.', stock: 4 },
+      { id: 74, name: '300mm PVC CABLE TIE', uom: 'Nos.', stock: 4 },
+      { id: 75, name: 'JUBILEE CLAMP', uom: 'Nos.', stock: 168 },
+      { id: 76, name: 'ONE WAY PUSH BUTTON', uom: 'Nos.', stock: 0 },
+      { id: 77, name: 'TWO WAY PUSH BUTTON', uom: 'Nos.', stock: 11 },
+      { id: 78, name: 'JB(AVA)600X800X300', uom: 'Nos.', stock: 0 },
+      { id: 79, name: 'DROP GATE CONTROL CARD(RIB 6M)', uom: 'Nos.', stock: 1 },
+      { id: 80, name: 'MICRO LIMIT SWITCH', uom: 'Nos.', stock: 3 },
+      { id: 81, name: '8" YELLOW ARROW CARD', uom: 'Nos.', stock: 1 },
+      { id: 82, name: 'SENSOR BOX', uom: 'Nos.', stock: 0 },
+      { id: 83, name: 'BIG SIZE REFLECTOR', uom: 'Nos.', stock: 0 },
+      { id: 84, name: 'Hooter Audio Card', uom: 'Nos.', stock: 15 },
+      { id: 85, name: 'PLC 1212', uom: 'Nos.', stock: 0 },
+      { id: 86, name: 'MCB 6A DOUBLE POLE', uom: 'Nos.', stock: 1 },
+      { id: 87, name: 'MCB 10A DOUBLE POLE', uom: 'Nos.', stock: 5 },
+      { id: 88, name: 'RCBO 10 Amp., 30mA', uom: 'Nos.', stock: 0 },
+      { id: 89, name: 'BOOM AUTOZONE', uom: 'Nos.', stock: 2 },
+      { id: 90, name: 'ULTRA SONIC SENSOR', uom: 'Nos.', stock: 0 }
+    ];
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
+      authDomain: "maintenance-tracker-9232f.firebaseapp.com",
+      projectId: "maintenance-tracker-9232f",
+      storageBucket: "maintenance-tracker-9232f.firebasestorage.app",
+      messagingSenderId: "1028949858608",
+      appId: "1:1028949858608:web:ca651824fedab23cb890f5",
+      measurementId: "G-R0560TMM98"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const currentUser = sessionStorage.getItem('activeUser') || 'Supervisor';
+    const userRole = sessionStorage.getItem('userRole') || 'supervisor';
+    const isAdmin = (userRole === 'admin');
+
+    let liveInventory = [];
+    let liveRequisitions = [];
+    let liveInwardLogs = [];
+
+    window.onload = function() {
+      document.getElementById('userDisplay').innerText = `${currentUser} (${userRole.toUpperCase()})`;
+      
+      if (isAdmin) {
+        document.getElementById('inwardTabBtn').style.display = 'block';
+      }
+
+      document.getElementById('reqDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('inwardDate').value = new Date().toISOString().split('T')[0];
+
+      initInventoryStore();
+    };
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    // INITIALIZE & SYNC INVENTORY IN FIRESTORE
+    async function initInventoryStore() {
+      try {
+        const snapshot = await db.collection("signal_inventory").get();
+        if (snapshot.empty) {
+          // Pre-seed the 90 items with auto serials on first run
+          for (let item of INITIAL_90_ITEMS) {
+            let serials = [];
+            let prefix = item.name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
+            for (let i = 1; i <= item.stock; i++) {
+              serials.push(`${prefix}_${i.toString().padStart(2, '0')}`);
+            }
+            await db.collection("signal_inventory").doc(item.id.toString()).set({
+              id: item.id,
+              name: item.name,
+              uom: item.uom,
+              stock: item.stock,
+              availableSerials: serials
+            });
+          }
+        }
+
+        listenInventory();
+        listenRequisitions();
+        listenInwardLogs();
+      } catch (err) {
+        console.error("Inventory Init Error:", err);
+      }
+    }
+
+    function listenInventory() {
+      db.collection("signal_inventory").orderBy("id").onSnapshot(snapshot => {
+        liveInventory = [];
+        const selectReq = document.getElementById('reqMaterial');
+        const selectInward = document.getElementById('inwardMaterial');
+
+        selectReq.innerHTML = '<option value="">-- Choose Stock Item --</option>';
+        selectInward.innerHTML = '<option value="">-- Choose Stock Item --</option>';
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          liveInventory.push(data);
+
+          if (data.stock > 0) {
+            selectReq.innerHTML += `<option value="${data.id}">${data.name} (Stock: ${data.stock} ${data.uom})</option>`;
+          }
+          selectInward.innerHTML += `<option value="${data.id}">${data.name} (Current: ${data.stock} ${data.uom})</option>`;
+        });
+
+        renderStockTable(liveInventory);
+      });
+    }
+
+    function renderStockTable(data) {
+      const tableBody = document.getElementById('stockTableBody');
+      tableBody.innerHTML = "";
+
+      data.forEach(item => {
+        const statusBadge = item.stock > 0 
+          ? `<span class="stock-badge-ok">In Stock</span>` 
+          : `<span class="stock-badge-low">Out of Stock</span>`;
+
+        const serialsList = (item.availableSerials && item.availableSerials.length > 0)
+          ? item.availableSerials.slice(0, 6).join(', ') + (item.availableSerials.length > 6 ? ` (+${item.availableSerials.length - 6} more)` : '')
+          : '<em style="color:#9e9e9e;">No Serials Available</em>';
+
+        const row = `
+          <tr>
+            <td>${item.id}</td>
+            <td><strong>${item.name}</strong></td>
+            <td>${item.uom}</td>
+            <td><strong style="font-size:15px; color:${item.stock > 0 ? '#1b5e20' : '#d32f2f'}">${item.stock}</strong></td>
+            <td>${statusBadge}</td>
+            <td><small style="color:#37474f;">${serialsList}</small></td>
+          </tr>
+        `;
+        tableBody.insertAdjacentHTML('beforeend', row);
+      });
+    }
+
+    function filterStockTable() {
+      const query = document.getElementById('stockSearchInput').value.trim().toUpperCase();
+      const filtered = liveInventory.filter(item => item.name.toUpperCase().includes(query));
+      renderStockTable(filtered);
+    }
+
+    // Dynamic serial selector when supervisor chooses item
+    function loadAvailableSerialsForSelect(itemId) {
+      const serialSelect = document.getElementById('reqSerial');
+      serialSelect.innerHTML = '<option value="">-- Select Available Serial --</option>';
+
+      if (!itemId) return;
+
+      const item = liveInventory.find(i => i.id == itemId);
+      if (item && item.availableSerials && item.availableSerials.length > 0) {
+        item.availableSerials.forEach(sn => {
+          serialSelect.innerHTML += `<option value="${sn}">${sn}</option>`;
+        });
+      } else {
+        serialSelect.innerHTML += `<option value="NON_SERIALIZED">General / Non-Serialized Issue</option>`;
+      }
+    }
+
+    // SUBMIT REQUISITION (SUPERVISOR)
+    document.getElementById('requisitionForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('reqSubmitBtn');
+      btn.innerText = "Submitting Requisition...";
+      btn.disabled = true;
+
+      const itemId = document.getElementById('reqMaterial').value;
+      const item = liveInventory.find(i => i.id == itemId);
+
+      const reqData = {
+        itemId: parseInt(itemId),
+        materialName: item.name,
+        uom: item.uom,
+        issuedSerial: document.getElementById('reqSerial').value,
+        quantity: 1,
+        dateOfIssue: document.getElementById('reqDate').value,
+        location: document.getElementById('reqLocation').value.trim(),
+        locationSide: document.getElementById('reqSide').value,
+        faultyItemName: document.getElementById('faultyName').value.trim(),
+        faultyItemSerial: document.getElementById('faultySerial').value.trim() || "N/A",
+        remarks: document.getElementById('reqRemarks').value.trim(),
+        status: "PENDING_APPROVAL",
+        requestedBy: currentUser,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        await db.collection("signal_requisitions").add(reqData);
+        alert("✅ Requisition submitted! Admin will review and approve.");
+        document.getElementById('requisitionForm').reset();
+        btn.innerText = "Submit Requisition for Admin Approval";
+        btn.disabled = false;
+      } catch (err) {
+        alert("Error: " + err.message);
+        btn.disabled = false;
+      }
+    });
+
+    // LISTEN REQUISITIONS & APPROVAL WORKFLOW
+    function listenRequisitions() {
+      db.collection("signal_requisitions").orderBy("createdAt", "desc").onSnapshot(snapshot => {
+        liveRequisitions = [];
+        let pendingCount = 0;
+        const tableBody = document.getElementById('requisitionTableBody');
+        const defectiveBody = document.getElementById('defectiveTableBody');
+
+        tableBody.innerHTML = "";
+        defectiveBody.innerHTML = "";
+
+        if (snapshot.empty) {
+          tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No requisition entries.</td></tr>`;
+          defectiveBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No defective items returned yet.</td></tr>`;
+          return;
+        }
+
+        let defIndex = 1;
+
+        snapshot.forEach((doc, idx) => {
+          const data = doc.data();
+          data.docId = doc.id;
+          liveRequisitions.push(data);
+
+          if (data.status === "PENDING_APPROVAL") pendingCount++;
+
+          let statusBadge = data.status === "APPROVED" 
+            ? `<span class="stock-badge-ok">✅ Approved & Deducted</span>` 
+            : `<span class="stock-badge-low">⏳ Pending Approval</span>`;
+
+          let actionBtn = "";
+          if (data.status === "PENDING_APPROVAL") {
+            if (isAdmin) {
+              actionBtn = `<button onclick="approveRequisition('${data.docId}', ${data.itemId}, '${data.issuedSerial}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Approve & Deduct</button>`;
+            } else {
+              actionBtn = `<span style="color:#f57f17; font-size:12px; font-weight:bold;">Awaiting Admin</span>`;
+            }
+          } else {
+            actionBtn = `<span style="color:#2e7d32; font-size:12px;">Issued to Site</span>`;
+          }
+
+          const row = `
+            <tr>
+              <td>${idx + 1}</td>
+              <td><strong>${data.materialName}</strong></td>
+              <td><span style="background:#e8eaf6; padding:3px 6px; border-radius:4px; font-weight:bold;">${data.issuedSerial}</span></td>
+              <td>${data.dateOfIssue}</td>
+              <td>${data.location}<br><small style="color:#546e7a;">(${data.locationSide})</small></td>
+              <td>${data.faultyItemName}<br><small style="color:#c62828;">SN: ${data.faultyItemSerial}</small></td>
+              <td><small>${data.requestedBy}</small></td>
+              <td>${statusBadge}</td>
+              <td>${actionBtn}</td>
+            </tr>
+          `;
+          tableBody.insertAdjacentHTML('beforeend', row);
+
+          // Populate Defective Ledger if approved
+          if (data.status === "APPROVED") {
+            const defRow = `
+              <tr>
+                <td>${defIndex++}</td>
+                <td>${data.dateOfIssue}</td>
+                <td><strong>${data.faultyItemName}</strong></td>
+                <td><span style="color:#c62828; font-weight:bold;">${data.faultyItemSerial}</span></td>
+                <td>${data.location}</td>
+                <td>${data.locationSide}</td>
+                <td>${data.materialName} (${data.issuedSerial})</td>
+                <td><small>${data.remarks}</small></td>
+                <td><small>${data.requestedBy}</small></td>
+              </tr>
+            `;
+            defectiveBody.insertAdjacentHTML('beforeend', defRow);
+          }
+        });
+
+        // Update badge
+        const badge = document.getElementById('pendingReqBadge');
+        if (pendingCount > 0) {
+          badge.innerText = pendingCount;
+          badge.style.display = "inline-block";
+        } else {
+          badge.style.display = "none";
+        }
+      });
+    }
+
+    // ADMIN APPROVAL LOGIC (DEDUCTS STOCK & SERIAL)
+    async function approveRequisition(reqDocId, itemId, issuedSerial) {
+      if (!confirm(`Are you sure you want to approve this requisition and deduct 1 item (${issuedSerial}) from stock?`)) return;
+
+      try {
+        const itemRef = db.collection("signal_inventory").doc(itemId.toString());
+        const itemSnap = await itemRef.get();
+
+        if (!itemSnap.exists || itemSnap.data().stock <= 0) {
+          alert("❌ Error: Stock is 0 or unavailable for this item!");
+          return;
+        }
+
+        const currentData = itemSnap.data();
+        const updatedStock = currentData.stock - 1;
+        let updatedSerials = (currentData.availableSerials || []).filter(sn => sn !== issuedSerial);
+
+        // Batch Update: Deduct stock and update requisition status
+        const batch = db.batch();
+        batch.update(itemRef, {
+          stock: updatedStock,
+          availableSerials: updatedSerials
+        });
+
+        const reqRef = db.collection("signal_requisitions").doc(reqDocId);
+        batch.update(reqRef, {
+          status: "APPROVED",
+          approvedBy: currentUser,
+          approvedAt: new Date().toISOString()
+        });
+
+        await batch.commit();
+        alert(`✅ Requisition Approved! Stock successfully deducted from ${currentData.stock} to ${updatedStock}.`);
+      } catch (err) {
+        alert("Approval failed: " + err.message);
+      }
+    }
+
+    // VENDOR INWARD STOCK ENTRY & AUTO-SERIAL GENERATOR (ADMIN ONLY)
+    function previewGeneratedSerials() {
+      const prefix = document.getElementById('inwardPrefix').value.trim().toUpperCase() || 'SN';
+      const qty = parseInt(document.getElementById('inwardQty').value) || 1;
+      const previewBox = document.getElementById('serialPreviewBox');
+
+      if (qty === 1) {
+        previewBox.innerText = `${prefix}_01`;
+      } else {
+        previewBox.innerText = `${prefix}_01 to ${prefix}_${qty.toString().padStart(2, '0')} (Total: ${qty} Serials)`;
+      }
+    }
+
+    document.getElementById('inwardForm')?.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('inwardSubmitBtn');
+      btn.innerText = "Receiving & Appending Serials...";
+      btn.disabled = true;
+
+      const itemId = document.getElementById('inwardMaterial').value;
+      const qty = parseInt(document.getElementById('inwardQty').value) || 1;
+      const prefix = document.getElementById('inwardPrefix').value.trim().toUpperCase() || 'ITEM';
+
+      // Generate Ascending Serials
+      let newSerials = [];
+      for (let i = 1; i <= qty; i++) {
+        newSerials.push(`${prefix}_${i.toString().padStart(2, '0')}`);
+      }
+
+      const itemRef = db.collection("signal_inventory").doc(itemId.toString());
+      const itemSnap = await itemRef.get();
+      const currentData = itemSnap.data();
+
+      const updatedStock = currentData.stock + qty;
+      const updatedSerials = [...(currentData.availableSerials || []), ...newSerials];
+
+      const inwardRecord = {
+        vendorName: document.getElementById('inwardVendor').value.trim(),
+        challanNumber: document.getElementById('inwardChallan').value.trim(),
+        receivedDate: document.getElementById('inwardDate').value,
+        itemId: parseInt(itemId),
+        materialName: currentData.name,
+        quantity: qty,
+        serialRange: `${newSerials[0]} to ${newSerials[newSerials.length - 1]}`,
+        remarks: document.getElementById('inwardRemarks').value.trim(),
+        receivedBy: currentUser,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const batch = db.batch();
+        batch.update(itemRef, {
+          stock: updatedStock,
+          availableSerials: updatedSerials
+        });
+
+        const inwardLogRef = db.collection("signal_inward_logs").doc();
+        batch.set(inwardLogRef, inwardRecord);
+
+        await batch.commit();
+        alert(`✅ Stock Inward Recorded! ${qty} units added. Stock increased to ${updatedStock}.`);
+        document.getElementById('inwardForm').reset();
+        previewGeneratedSerials();
+        btn.innerText = "Receive Stock & Append Serial Numbers";
+        btn.disabled = false;
+      } catch (err) {
+        alert("Inward recording failed: " + err.message);
+        btn.disabled = false;
+      }
+    });
+
+    function listenInwardLogs() {
+      db.collection("signal_inward_logs").orderBy("createdAt", "desc").onSnapshot(snapshot => {
+        liveInwardLogs = [];
+        const tableBody = document.getElementById('inwardTableBody');
+        tableBody.innerHTML = "";
+
+        if (snapshot.empty) {
+          tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No vendor inward entries recorded yet.</td></tr>`;
+          return;
+        }
+
+        snapshot.forEach((doc, idx) => {
+          const data = doc.data();
+          liveInwardLogs.push(data);
+
+          const row = `
+            <tr>
+              <td>${idx + 1}</td>
+              <td>${data.receivedDate}</td>
+              <td><strong>${data.vendorName}</strong></td>
+              <td><span style="background:#fff3e0; padding:3px 6px; border-radius:4px; font-weight:bold;">${data.challanNumber}</span></td>
+              <td>${data.materialName}</td>
+              <td><strong style="color:#1b5e20;">+${data.quantity}</strong></td>
+              <td><small>${data.serialRange}</small></td>
+              <td><small>${data.receivedBy}</small></td>
+            </tr>
+          `;
+          tableBody.insertAdjacentHTML('beforeend', row);
+        });
+      });
+    }
+
+    // EXCEL EXPORTS
+    function exportStockExcel() {
+      const exportData = liveInventory.map(r => ({
+        "Sr. No": r.id,
+        "Material Description": r.name,
+        "UoM": r.uom,
+        "Balance Stock": r.stock,
+        "Available Serial Numbers": (r.availableSerials || []).join(', ')
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Balance_Stock");
+      XLSX.writeFile(wb, `Signal_Stock_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    function exportDefectiveExcel() {
+      const approvedRequisitions = liveRequisitions.filter(r => r.status === "APPROVED");
+      const exportData = approvedRequisitions.map((r, i) => ({
+        "Sl No": i + 1,
+        "Date Replaced": r.dateOfIssue,
+        "Faulty Item Name": r.faultyItemName,
+        "Faulty Serial #": r.faultyItemSerial,
+        "Removed From Location": r.location,
+        "Position / Side": r.locationSide,
+        "Replacement Unit Issued": `${r.materialName} (${r.issuedSerial})`,
+        "Fault Description": r.remarks,
+        "Replaced By": r.requestedBy
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Defective_Items_Ledger");
+      XLSX.writeFile(wb, `Defective_Items_Scrap_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    function switchAccount() {
+      sessionStorage.clear();
+      window.location.href = `login.html?redirect=${encodeURIComponent(window.location.href)}`;
+    }
+
+    function logout() {
+      sessionStorage.clear();
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>
