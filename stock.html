@@ -101,16 +101,15 @@
         <table>
           <thead>
             <tr>
-              <th>Sr.</th>
+              <th style="width:60px;">Sr.</th>
               <th>Material Description</th>
-              <th>UoM</th>
-              <th>Balance Stock</th>
-              <th>Status</th>
-              <th>Available Serial Numbers</th>
+              <th style="width:100px;">UoM</th>
+              <th style="width:140px;">Balance Stock</th>
+              <th style="width:130px;">Stock Status</th>
             </tr>
           </thead>
           <tbody id="stockTableBody">
-            <tr><td colspan="6" style="text-align:center; padding:20px;">Loading Inventory Database...</td></tr>
+            <tr><td colspan="5" style="text-align:center; padding:20px;">Loading Inventory Database...</td></tr>
           </tbody>
         </table>
       </div>
@@ -118,28 +117,25 @@
 
     <!-- TAB 2: MATERIAL REQUISITION & APPROVAL -->
     <div id="tabRequisition" class="tab-content">
-      <!-- Supervisor Request Box -->
       <div style="background:#e8eaf6; border:1px solid #c5cae9; padding:20px; border-radius:8px; margin-bottom:25px;">
         <h3 style="color:#1a237e; margin-bottom:15px;">+ Raise Material Requisition for Replacement</h3>
         <form id="requisitionForm">
           <div class="form-grid">
             <div class="form-group">
-              <label for="reqMaterial">Select Material *</label>
-              <select id="reqMaterial" required onchange="loadAvailableSerialsForSelect(this.value)">
+              <label for="reqMaterial">Select Material Description *</label>
+              <select id="reqMaterial" required>
                 <option value="">-- Choose Stock Item --</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label for="reqSerial">Select Available Serial / Part # *</label>
-              <select id="reqSerial" required>
-                <option value="">-- Select Available Serial --</option>
-              </select>
+              <label for="reqQty">Quantity Required *</label>
+              <input type="number" id="reqQty" value="1" min="1" required>
             </div>
 
             <div class="form-group">
-              <label for="reqQty">Quantity Required *</label>
-              <input type="number" id="reqQty" value="1" min="1" required readonly style="background:#eceff1;">
+              <label for="reqSerial">New Item Serial / Tag # (Optional / If Any)</label>
+              <input type="text" id="reqSerial" placeholder="e.g. SN-4401 or leave blank">
             </div>
 
             <div class="form-group">
@@ -167,17 +163,17 @@
 
             <div class="form-group">
               <label for="faultyName">Faulty / Defective Item Description *</label>
-              <input type="text" id="faultyName" placeholder="e.g. Burned Flasher Card, Defective 24V Relay" required>
+              <input type="text" id="faultyName" placeholder="e.g. Burned Card, Defective 24V Relay" required>
             </div>
 
             <div class="form-group">
-              <label for="faultySerial">Faulty Item Serial / Part # (if visible)</label>
-              <input type="text" id="faultySerial" placeholder="e.g. OLD-CARD-992 or Unmarked">
+              <label for="faultySerial">Faulty Item Serial / Part # (Optional)</label>
+              <input type="text" id="faultySerial" placeholder="e.g. OLD-CARD-992 or leave blank">
             </div>
 
             <div class="form-group full-width">
               <label for="reqRemarks">Reason for Replacement / Remarks *</label>
-              <textarea id="reqRemarks" rows="2" placeholder="Describe the fault observed (e.g. No output voltage, LED array damaged during thunderstorm)" required></textarea>
+              <textarea id="reqRemarks" rows="2" placeholder="Describe the fault observed" required></textarea>
             </div>
           </div>
 
@@ -192,7 +188,8 @@
             <tr>
               <th>#</th>
               <th>Material</th>
-              <th>Issued Serial #</th>
+              <th>Qty</th>
+              <th>New Serial Tag</th>
               <th>Date</th>
               <th>Target Location & Side</th>
               <th>Faulty Item Replaced</th>
@@ -202,7 +199,7 @@
             </tr>
           </thead>
           <tbody id="requisitionTableBody">
-            <tr><td colspan="9" style="text-align:center; padding:20px;">Fetching Requisition Logs...</td></tr>
+            <tr><td colspan="10" style="text-align:center; padding:20px;">Fetching Requisition Logs...</td></tr>
           </tbody>
         </table>
       </div>
@@ -211,7 +208,7 @@
     <!-- TAB 3: VENDOR INWARD ENTRY (ADMIN ONLY) -->
     <div id="tabInward" class="tab-content">
       <div style="background:#fff3e0; border:1px solid #ffe0b2; padding:20px; border-radius:8px; margin-bottom:25px;">
-        <h3 style="color:#e65100; margin-bottom:15px;">📥 Vendor Inward Stock & Challan Receipt (Auto Serial Generator)</h3>
+        <h3 style="color:#e65100; margin-bottom:15px;">📥 Vendor Inward Stock & Challan Receipt</h3>
         <form id="inwardForm">
           <div class="form-grid">
             <div class="form-group">
@@ -238,28 +235,21 @@
 
             <div class="form-group">
               <label for="inwardQty">Quantity Supplied *</label>
-              <input type="number" id="inwardQty" min="1" value="1" required oninput="previewGeneratedSerials()">
+              <input type="number" id="inwardQty" min="1" value="1" required>
             </div>
 
             <div class="form-group">
-              <label for="inwardPrefix">Serial Number Prefix</label>
-              <input type="text" id="inwardPrefix" placeholder="e.g. VIRTUAL_CARD" oninput="previewGeneratedSerials()">
-            </div>
-
-            <div class="form-group full-width">
-              <label>Generated Ascending Serial Numbers Preview:</label>
-              <div id="serialPreviewBox" style="background:#fff; border:1px dashed #e65100; padding:10px; border-radius:4px; font-weight:bold; color:#e65100; min-height:38px;">
-                Prefix_01 to Prefix_01
-              </div>
+              <label for="inwardSerialRange">Serial Number / Lot Details (Optional)</label>
+              <input type="text" id="inwardSerialRange" placeholder="e.g. Lot #4401 to #4415 or Tag Details">
             </div>
 
             <div class="form-group full-width">
               <label for="inwardRemarks">Receiving Remarks / Inspector</label>
-              <textarea id="inwardRemarks" rows="2" placeholder="e.g. Inspected against PO-7721, testing passed"></textarea>
+              <textarea id="inwardRemarks" rows="2" placeholder="e.g. Inspected against PO, testing verified"></textarea>
             </div>
           </div>
 
-          <button type="submit" id="inwardSubmitBtn" class="submit-btn" style="background:#e65100; width:100%; margin-top:10px;">Receive Stock & Append Serial Numbers</button>
+          <button type="submit" id="inwardSubmitBtn" class="submit-btn" style="background:#e65100; width:100%; margin-top:10px;">Receive Stock & Update Inventory</button>
         </form>
       </div>
 
@@ -274,7 +264,7 @@
               <th>Challan #</th>
               <th>Material</th>
               <th>Qty Added</th>
-              <th>Assigned Serial Range</th>
+              <th>Lot / Serial Tag</th>
               <th>Received By</th>
             </tr>
           </thead>
@@ -317,9 +307,7 @@
   </div>
 
   <script>
-    // =========================================================================
     // 90 PRE-LOADED SIGNAL SYSTEM ITEMS (FROM YOUR EXCEL FILE)
-    // =========================================================================
     const INITIAL_90_ITEMS = [
       { id: 1, name: '12" Light 220 Volt with case (RED)', uom: 'Nos.', stock: 12 },
       { id: 2, name: '12" Light 220 Volt with case (YELLOW)', uom: 'Nos.', stock: 13 },
@@ -455,24 +443,16 @@
       document.getElementById(tabId).classList.add('active');
     }
 
-    // INITIALIZE & SYNC INVENTORY IN FIRESTORE
     async function initInventoryStore() {
       try {
         const snapshot = await db.collection("signal_inventory").get();
         if (snapshot.empty) {
-          // Pre-seed the 90 items with auto serials on first run
           for (let item of INITIAL_90_ITEMS) {
-            let serials = [];
-            let prefix = item.name.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8).toUpperCase();
-            for (let i = 1; i <= item.stock; i++) {
-              serials.push(`${prefix}_${i.toString().padStart(2, '0')}`);
-            }
             await db.collection("signal_inventory").doc(item.id.toString()).set({
               id: item.id,
               name: item.name,
               uom: item.uom,
-              stock: item.stock,
-              availableSerials: serials
+              stock: item.stock
             });
           }
         }
@@ -517,10 +497,6 @@
           ? `<span class="stock-badge-ok">In Stock</span>` 
           : `<span class="stock-badge-low">Out of Stock</span>`;
 
-        const serialsList = (item.availableSerials && item.availableSerials.length > 0)
-          ? item.availableSerials.slice(0, 6).join(', ') + (item.availableSerials.length > 6 ? ` (+${item.availableSerials.length - 6} more)` : '')
-          : '<em style="color:#9e9e9e;">No Serials Available</em>';
-
         const row = `
           <tr>
             <td>${item.id}</td>
@@ -528,7 +504,6 @@
             <td>${item.uom}</td>
             <td><strong style="font-size:15px; color:${item.stock > 0 ? '#1b5e20' : '#d32f2f'}">${item.stock}</strong></td>
             <td>${statusBadge}</td>
-            <td><small style="color:#37474f;">${serialsList}</small></td>
           </tr>
         `;
         tableBody.insertAdjacentHTML('beforeend', row);
@@ -541,23 +516,6 @@
       renderStockTable(filtered);
     }
 
-    // Dynamic serial selector when supervisor chooses item
-    function loadAvailableSerialsForSelect(itemId) {
-      const serialSelect = document.getElementById('reqSerial');
-      serialSelect.innerHTML = '<option value="">-- Select Available Serial --</option>';
-
-      if (!itemId) return;
-
-      const item = liveInventory.find(i => i.id == itemId);
-      if (item && item.availableSerials && item.availableSerials.length > 0) {
-        item.availableSerials.forEach(sn => {
-          serialSelect.innerHTML += `<option value="${sn}">${sn}</option>`;
-        });
-      } else {
-        serialSelect.innerHTML += `<option value="NON_SERIALIZED">General / Non-Serialized Issue</option>`;
-      }
-    }
-
     // SUBMIT REQUISITION (SUPERVISOR)
     document.getElementById('requisitionForm').addEventListener('submit', async function(e) {
       e.preventDefault();
@@ -567,18 +525,26 @@
 
       const itemId = document.getElementById('reqMaterial').value;
       const item = liveInventory.find(i => i.id == itemId);
+      const reqQty = parseInt(document.getElementById('reqQty').value) || 1;
+
+      if (reqQty > item.stock) {
+        alert(`❌ Requested quantity (${reqQty}) exceeds current balance stock (${item.stock})!`);
+        btn.innerText = "Submit Requisition for Admin Approval";
+        btn.disabled = false;
+        return;
+      }
 
       const reqData = {
         itemId: parseInt(itemId),
         materialName: item.name,
         uom: item.uom,
-        issuedSerial: document.getElementById('reqSerial').value,
-        quantity: 1,
+        quantity: reqQty,
+        issuedSerial: document.getElementById('reqSerial').value.trim() || "Unmarked / Tagged",
         dateOfIssue: document.getElementById('reqDate').value,
         location: document.getElementById('reqLocation').value.trim(),
         locationSide: document.getElementById('reqSide').value,
         faultyItemName: document.getElementById('faultyName').value.trim(),
-        faultyItemSerial: document.getElementById('faultySerial').value.trim() || "N/A",
+        faultyItemSerial: document.getElementById('faultySerial').value.trim() || "Unmarked",
         remarks: document.getElementById('reqRemarks').value.trim(),
         status: "PENDING_APPROVAL",
         requestedBy: currentUser,
@@ -609,7 +575,7 @@
         defectiveBody.innerHTML = "";
 
         if (snapshot.empty) {
-          tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No requisition entries.</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#888;">No requisition entries.</td></tr>`;
           defectiveBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No defective items returned yet.</td></tr>`;
           return;
         }
@@ -624,13 +590,13 @@
           if (data.status === "PENDING_APPROVAL") pendingCount++;
 
           let statusBadge = data.status === "APPROVED" 
-            ? `<span class="stock-badge-ok">✅ Approved & Deducted</span>` 
+            ? `<span class="stock-badge-ok">✅ Approved</span>` 
             : `<span class="stock-badge-low">⏳ Pending Approval</span>`;
 
           let actionBtn = "";
           if (data.status === "PENDING_APPROVAL") {
             if (isAdmin) {
-              actionBtn = `<button onclick="approveRequisition('${data.docId}', ${data.itemId}, '${data.issuedSerial}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Approve & Deduct</button>`;
+              actionBtn = `<button onclick="approveRequisition('${data.docId}', ${data.itemId}, ${data.quantity})" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Approve & Deduct</button>`;
             } else {
               actionBtn = `<span style="color:#f57f17; font-size:12px; font-weight:bold;">Awaiting Admin</span>`;
             }
@@ -642,7 +608,8 @@
             <tr>
               <td>${idx + 1}</td>
               <td><strong>${data.materialName}</strong></td>
-              <td><span style="background:#e8eaf6; padding:3px 6px; border-radius:4px; font-weight:bold;">${data.issuedSerial}</span></td>
+              <td><strong>${data.quantity} ${data.uom || ''}</strong></td>
+              <td><span style="background:#e8eaf6; padding:3px 6px; border-radius:4px;">${data.issuedSerial}</span></td>
               <td>${data.dateOfIssue}</td>
               <td>${data.location}<br><small style="color:#546e7a;">(${data.locationSide})</small></td>
               <td>${data.faultyItemName}<br><small style="color:#c62828;">SN: ${data.faultyItemSerial}</small></td>
@@ -653,7 +620,6 @@
           `;
           tableBody.insertAdjacentHTML('beforeend', row);
 
-          // Populate Defective Ledger if approved
           if (data.status === "APPROVED") {
             const defRow = `
               <tr>
@@ -663,7 +629,7 @@
                 <td><span style="color:#c62828; font-weight:bold;">${data.faultyItemSerial}</span></td>
                 <td>${data.location}</td>
                 <td>${data.locationSide}</td>
-                <td>${data.materialName} (${data.issuedSerial})</td>
+                <td>${data.materialName} (${data.quantity} ${data.uom || ''})</td>
                 <td><small>${data.remarks}</small></td>
                 <td><small>${data.requestedBy}</small></td>
               </tr>
@@ -672,7 +638,6 @@
           }
         });
 
-        // Update badge
         const badge = document.getElementById('pendingReqBadge');
         if (pendingCount > 0) {
           badge.innerText = pendingCount;
@@ -683,29 +648,24 @@
       });
     }
 
-    // ADMIN APPROVAL LOGIC (DEDUCTS STOCK & SERIAL)
-    async function approveRequisition(reqDocId, itemId, issuedSerial) {
-      if (!confirm(`Are you sure you want to approve this requisition and deduct 1 item (${issuedSerial}) from stock?`)) return;
+    // ADMIN APPROVAL LOGIC
+    async function approveRequisition(reqDocId, itemId, reqQty) {
+      if (!confirm(`Are you sure you want to approve this requisition and deduct ${reqQty} item(s) from stock?`)) return;
 
       try {
         const itemRef = db.collection("signal_inventory").doc(itemId.toString());
         const itemSnap = await itemRef.get();
 
-        if (!itemSnap.exists || itemSnap.data().stock <= 0) {
-          alert("❌ Error: Stock is 0 or unavailable for this item!");
+        if (!itemSnap.exists || itemSnap.data().stock < reqQty) {
+          alert("❌ Error: Stock is insufficient for this item!");
           return;
         }
 
         const currentData = itemSnap.data();
-        const updatedStock = currentData.stock - 1;
-        let updatedSerials = (currentData.availableSerials || []).filter(sn => sn !== issuedSerial);
+        const updatedStock = currentData.stock - reqQty;
 
-        // Batch Update: Deduct stock and update requisition status
         const batch = db.batch();
-        batch.update(itemRef, {
-          stock: updatedStock,
-          availableSerials: updatedSerials
-        });
+        batch.update(itemRef, { stock: updatedStock });
 
         const reqRef = db.collection("signal_requisitions").doc(reqDocId);
         batch.update(reqRef, {
@@ -715,47 +675,27 @@
         });
 
         await batch.commit();
-        alert(`✅ Requisition Approved! Stock successfully deducted from ${currentData.stock} to ${updatedStock}.`);
+        alert(`✅ Requisition Approved! Stock updated from ${currentData.stock} to ${updatedStock}.`);
       } catch (err) {
         alert("Approval failed: " + err.message);
       }
     }
 
-    // VENDOR INWARD STOCK ENTRY & AUTO-SERIAL GENERATOR (ADMIN ONLY)
-    function previewGeneratedSerials() {
-      const prefix = document.getElementById('inwardPrefix').value.trim().toUpperCase() || 'SN';
-      const qty = parseInt(document.getElementById('inwardQty').value) || 1;
-      const previewBox = document.getElementById('serialPreviewBox');
-
-      if (qty === 1) {
-        previewBox.innerText = `${prefix}_01`;
-      } else {
-        previewBox.innerText = `${prefix}_01 to ${prefix}_${qty.toString().padStart(2, '0')} (Total: ${qty} Serials)`;
-      }
-    }
-
+    // VENDOR INWARD STOCK ENTRY (ADMIN ONLY)
     document.getElementById('inwardForm')?.addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('inwardSubmitBtn');
-      btn.innerText = "Receiving & Appending Serials...";
+      btn.innerText = "Receiving Stock...";
       btn.disabled = true;
 
       const itemId = document.getElementById('inwardMaterial').value;
       const qty = parseInt(document.getElementById('inwardQty').value) || 1;
-      const prefix = document.getElementById('inwardPrefix').value.trim().toUpperCase() || 'ITEM';
-
-      // Generate Ascending Serials
-      let newSerials = [];
-      for (let i = 1; i <= qty; i++) {
-        newSerials.push(`${prefix}_${i.toString().padStart(2, '0')}`);
-      }
 
       const itemRef = db.collection("signal_inventory").doc(itemId.toString());
       const itemSnap = await itemRef.get();
       const currentData = itemSnap.data();
 
       const updatedStock = currentData.stock + qty;
-      const updatedSerials = [...(currentData.availableSerials || []), ...newSerials];
 
       const inwardRecord = {
         vendorName: document.getElementById('inwardVendor').value.trim(),
@@ -764,7 +704,7 @@
         itemId: parseInt(itemId),
         materialName: currentData.name,
         quantity: qty,
-        serialRange: `${newSerials[0]} to ${newSerials[newSerials.length - 1]}`,
+        serialRange: document.getElementById('inwardSerialRange').value.trim() || "Batch Supply",
         remarks: document.getElementById('inwardRemarks').value.trim(),
         receivedBy: currentUser,
         createdAt: new Date().toISOString()
@@ -772,10 +712,7 @@
 
       try {
         const batch = db.batch();
-        batch.update(itemRef, {
-          stock: updatedStock,
-          availableSerials: updatedSerials
-        });
+        batch.update(itemRef, { stock: updatedStock });
 
         const inwardLogRef = db.collection("signal_inward_logs").doc();
         batch.set(inwardLogRef, inwardRecord);
@@ -783,8 +720,7 @@
         await batch.commit();
         alert(`✅ Stock Inward Recorded! ${qty} units added. Stock increased to ${updatedStock}.`);
         document.getElementById('inwardForm').reset();
-        previewGeneratedSerials();
-        btn.innerText = "Receive Stock & Append Serial Numbers";
+        btn.innerText = "Receive Stock & Update Inventory";
         btn.disabled = false;
       } catch (err) {
         alert("Inward recording failed: " + err.message);
@@ -830,8 +766,7 @@
         "Sr. No": r.id,
         "Material Description": r.name,
         "UoM": r.uom,
-        "Balance Stock": r.stock,
-        "Available Serial Numbers": (r.availableSerials || []).join(', ')
+        "Balance Stock": r.stock
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
@@ -849,7 +784,7 @@
         "Faulty Serial #": r.faultyItemSerial,
         "Removed From Location": r.location,
         "Position / Side": r.locationSide,
-        "Replacement Unit Issued": `${r.materialName} (${r.issuedSerial})`,
+        "Replacement Unit Issued": `${r.materialName} (${r.quantity} ${r.uom || ''})`,
         "Fault Description": r.remarks,
         "Replaced By": r.requestedBy
       }));
