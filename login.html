@@ -3,61 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Portal Login</title>
+  <title>Login - Maintenance Management Portal</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="auth-container">
-    <h2 style="margin-bottom: 10px;">Maintenance Auth</h2>
-    <p style="color: #607d8b; font-size: 14px; margin-bottom: 20px;">Enter credentials to access dedicated functions</p>
+    <h2 style="color: #1a237e; margin-bottom: 5px;">Portal Access Login</h2>
+    <p style="color: #607d8b; font-size: 13px; margin-bottom: 20px;">Central Maintenance & Stock System</p>
     
-    <div id="errorMessage" class="error-message">Invalid Login ID or Password!</div>
+    <div id="errorAlert" class="error-message">Invalid Username or Password!</div>
 
     <form id="loginForm">
       <div class="form-group">
-        <label for="loginId">Login ID</label>
-        <input type="text" id="loginId" placeholder="ADMIN or SUPERVISOR" required autocomplete="off">
+        <label for="username">Username / ID</label>
+        <input type="text" id="username" placeholder="CLIENT, ADMIN, or SUPERVISOR" required autocomplete="username">
       </div>
 
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter Password" required>
+        <input type="password" id="password" placeholder="Enter Password" required autocomplete="current-password">
       </div>
 
-      <button type="submit" class="submit-btn" style="width: 100%;">Login & Continue</button>
+      <button type="submit" class="submit-btn" style="width: 100%;">Sign In</button>
     </form>
-    
-    <div style="margin-top: 20px;">
-      <a href="index.html" style="color: #1a237e; font-size: 13px; text-decoration: none;">← Back to Main Dashboard</a>
+
+    <div style="margin-top: 25px; font-size: 12px; color: #78909c; text-align: left; background: #eceff1; padding: 12px; border-radius: 4px; line-height: 1.6;">
+      <strong>Standard Role Credentials:</strong><br>
+      👑 <strong>Client (Master):</strong> <code>CLIENT</code> / <code>CLIENT@123</code><br>
+      🛠️ <strong>Admin:</strong> <code>ADMIN</code> / <code>ADMIN@123</code><br>
+      👷 <strong>Supervisor:</strong> <code>SUPERVISOR</code> / <code>SUPER@123</code>
     </div>
   </div>
 
   <script>
-    const AUTH_CREDENTIALS = [
-      { user: "ADMIN", pass: "ADMIN@123", role: "admin" },
-      { user: "SUPERVISOR", pass: "MAINT@2026", role: "supervisor" }
-    ];
+    const USERS_DB = {
+      "CLIENT": { pass: "CLIENT@123", role: "client", name: "Tata Steel UISL Client (Master)" },
+      "MASTER": { pass: "MASTER@123", role: "client", name: "Master Authority" },
+      "ADMIN": { pass: "ADMIN@123", role: "admin", name: "Central Administrator" },
+      "SUPERVISOR": { pass: "SUPER@123", role: "supervisor", name: "Field Duty Supervisor" }
+    };
 
     document.getElementById('loginForm').addEventListener('submit', function(e) {
       e.preventDefault();
-      
-      const enteredUser = document.getElementById('loginId').value.trim().toUpperCase();
-      const enteredPass = document.getElementById('password').value;
+      const u = document.getElementById('username').value.trim().toUpperCase();
+      const p = document.getElementById('password').value.trim();
+      const errBox = document.getElementById('errorAlert');
 
-      const matched = AUTH_CREDENTIALS.find(
-        cred => cred.user === enteredUser && cred.pass === enteredPass
-      );
-
-      if (matched) {
+      if (USERS_DB[u] && USERS_DB[u].pass === p) {
         sessionStorage.setItem('isLoggedIn', 'true');
-        sessionStorage.setItem('activeUser', matched.user);
-        sessionStorage.setItem('userRole', matched.role);
-        
+        sessionStorage.setItem('activeUser', USERS_DB[u].name);
+        sessionStorage.setItem('userRole', USERS_DB[u].role);
+
         const urlParams = new URLSearchParams(window.location.search);
-        const redirectUrl = urlParams.get('redirect') || 'index.html';
-        window.location.href = redirectUrl;
+        const redirectUrl = urlParams.get('redirect');
+
+        if (redirectUrl) {
+          window.location.href = decodeURIComponent(redirectUrl);
+        } else {
+          window.location.href = 'index.html';
+        }
       } else {
-        document.getElementById('errorMessage').style.display = 'block';
+        errBox.style.display = 'block';
       }
     });
   </script>

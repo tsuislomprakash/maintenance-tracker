@@ -33,15 +33,15 @@
       <div class="card" style="border: 2px solid #e65100; background: #fff8e1;">
         <span id="planCountBadge" class="counter-badge">0</span>
         <h3 style="color:#e65100;">Daily Maintenance Plan</h3>
-        <p>Admin scheduled tasks & directives. View target dates, priority & execute work orders.</p>
+        <p>Admin/Client scheduled tasks & directives. View target dates, priority & execute work orders.</p>
         <a href="planner.html" class="nav-btn" style="background:#e65100;">Open Maintenance Plan</a>
       </div>
 
-      <!-- 2. Signal System Stock Portal Card (NEW) -->
+      <!-- 2. Signal System Stock Portal Card -->
       <div class="card" style="border: 2px solid #00838f; background: #e0f7fa;">
         <span id="stockReqBadge" class="counter-badge">0</span>
         <h3 style="color:#00838f;">Signal System Stock</h3>
-        <p>90 Items Inventory, Requisitions, Admin Approvals, Vendor Inward & Defective Ledger.</p>
+        <p>90 Items Inventory, Requisitions, Client Approvals, Vendor Inward & Defective Ledger.</p>
         <a href="stock.html" class="nav-btn" style="background:#00838f;">Open Stock Portal</a>
       </div>
 
@@ -66,10 +66,10 @@
         <a href="history.html" class="nav-btn" style="background:#37474f;">Open All Records</a>
       </div>
 
-      <!-- 6. QR Generator Card (Admin Only) -->
+      <!-- 6. QR Generator Card (Admin & Client Master) -->
       <div class="card" id="adminQrCard" style="display: none; border: 2px solid #00796b; background: #e0f2f1;">
         <h3 style="color:#00796b;">QR Generator for Panels</h3>
-        <p>Admin Tool: Generate & Print dedicated QR code stickers for all 84 control panels.</p>
+        <p>Master Tool: Generate & Print dedicated QR code stickers for all 84 control panels.</p>
         <a href="qr-generator.html" class="nav-btn" style="background:#00796b;">Generate 84 QR Stickers</a>
       </div>
     </div>
@@ -113,17 +113,23 @@
       const authBox = document.getElementById('authHeader');
       const qrCard = document.getElementById('adminQrCard');
       const user = sessionStorage.getItem('activeUser') || 'User';
-      const role = sessionStorage.getItem('userRole') || 'supervisor';
+      const role = (sessionStorage.getItem('userRole') || 'supervisor').toLowerCase();
+      const isClient = (role === 'client' || role === 'master');
+      const isAdmin = (role === 'admin');
+      const isAdminOrClient = (isAdmin || isClient);
+
+      if (isAdminOrClient) {
+        qrCard.style.display = "block";
+      } else {
+        qrCard.style.display = "none";
+      }
 
       let adminAction = "";
-      if (role === 'admin') {
-        qrCard.style.display = "block";
+      if (isAdminOrClient) {
         adminAction = `
           <a href="planner.html" class="nav-btn" style="background:#e65100; margin-right:4px;">+ Assign Plan</a>
           <a href="qr-generator.html" class="nav-btn" style="background:#00796b; margin-right:4px;">QR Tool</a>
         `;
-      } else {
-        qrCard.style.display = "none";
       }
 
       authBox.innerHTML = `
@@ -147,10 +153,19 @@
       });
     }
 
-    // Realtime Requisition Alert Badge on Dashboard
     function listenPendingStockRequests() {
-      db.collection("signal_requisitions").where("status", "==", "PENDING_APPROVAL").onSnapshot(snapshot => {
-        const count = snapshot.size;
+      db.collection("signal_requisitions").onSnapshot(snapshot => {
+        let count = 0;
+        const role = (sessionStorage.getItem('userRole') || '').toLowerCase();
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          if (role === 'client' || role === 'master') {
+            if (d.status === 'PENDING_CLIENT_APPROVAL') count++;
+          } else if (role === 'admin') {
+            if (d.status === 'PENDING_ADMIN_REVIEW') count++;
+          }
+        });
+
         const badge = document.getElementById('stockReqBadge');
         if (count > 0) {
           badge.innerText = count;

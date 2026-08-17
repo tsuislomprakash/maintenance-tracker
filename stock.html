@@ -55,10 +55,23 @@
       padding: 3px 8px;
       border-radius: 4px;
     }
+    .stock-badge-pending-admin {
+      background-color: #fff8e1;
+      color: #f57f17;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .stock-badge-pending-client {
+      background-color: #e1f5fe;
+      color: #0288d1;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <!-- Security Check -->
   <script>
     if (sessionStorage.getItem('isLoggedIn') !== 'true') {
       window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
@@ -69,7 +82,7 @@
     <header>
       <div class="header-left">
         <h2>Signal System Inventory & Spare Management</h2>
-        <small style="color:#607d8b;">Balance Stock, Requisition Approval & Challan Inward Tracking</small>
+        <small style="color:#607d8b;">Balance Stock, Client Approval Hierarchy & Challan Inward Tracking</small>
       </div>
 
       <div class="user-controls">
@@ -83,8 +96,8 @@
     <!-- Navigation Tabs -->
     <div class="tab-bar">
       <button class="tab-btn active" onclick="switchTab('tabInventory')">📦 Live Balance Stock (90 Items)</button>
-      <button class="tab-btn" onclick="switchTab('tabRequisition')">📝 Material Requisition & Approvals <span id="pendingReqBadge" class="counter-badge" style="position:static; margin-left:5px;">0</span></button>
-      <button class="tab-btn" id="inwardTabBtn" style="display:none;" onclick="switchTab('tabInward')">📥 Vendor Inward Entry (Admin)</button>
+      <button class="tab-btn" onclick="switchTab('tabRequisition')">📝 Requisitions & Client Approvals <span id="pendingReqBadge" class="counter-badge" style="position:static; margin-left:5px;">0</span></button>
+      <button class="tab-btn" id="inwardTabBtn" style="display:none;" onclick="switchTab('tabInward')">📥 Vendor Inward Entry (Admin/Client)</button>
       <button class="tab-btn" onclick="switchTab('tabDefective')">⚠️ Defective / Replaced Items Ledger</button>
     </div>
 
@@ -115,10 +128,10 @@
       </div>
     </div>
 
-    <!-- TAB 2: MATERIAL REQUISITION & APPROVAL -->
+    <!-- TAB 2: MATERIAL REQUISITION & 2-STEP APPROVAL -->
     <div id="tabRequisition" class="tab-content">
       <div style="background:#e8eaf6; border:1px solid #c5cae9; padding:20px; border-radius:8px; margin-bottom:25px;">
-        <h3 style="color:#1a237e; margin-bottom:15px;">+ Raise Material Requisition for Replacement</h3>
+        <h3 style="color:#1a237e; margin-bottom:15px;">+ Raise Material Requisition for Replacement (Supervisor)</h3>
         <form id="requisitionForm">
           <div class="form-grid">
             <div class="form-group">
@@ -134,7 +147,7 @@
             </div>
 
             <div class="form-group">
-              <label for="reqSerial">New Item Serial / Tag # (Optional / If Any)</label>
+              <label for="reqSerial">New Item Serial / Tag # (Optional)</label>
               <input type="text" id="reqSerial" placeholder="e.g. SN-4401 or leave blank">
             </div>
 
@@ -177,11 +190,11 @@
             </div>
           </div>
 
-          <button type="submit" id="reqSubmitBtn" class="submit-btn" style="width:100%; margin-top:10px;">Submit Requisition for Admin Approval</button>
+          <button type="submit" id="reqSubmitBtn" class="submit-btn" style="width:100%; margin-top:10px;">Submit Requisition (Pending Admin ➔ Client)</button>
         </form>
       </div>
 
-      <h3 style="margin-bottom:15px; color:#1a237e;">Requisition Logs & Admin Approvals</h3>
+      <h3 style="margin-bottom:15px; color:#1a237e;">Requisition Logs & Multi-Tier Approvals</h3>
       <div class="table-container">
         <table>
           <thead>
@@ -189,13 +202,13 @@
               <th>#</th>
               <th>Material</th>
               <th>Qty</th>
-              <th>New Serial Tag</th>
+              <th>Serial Tag</th>
               <th>Date</th>
-              <th>Target Location & Side</th>
-              <th>Faulty Item Replaced</th>
+              <th>Target Location</th>
+              <th>Faulty Item</th>
               <th>Requested By</th>
               <th>Status</th>
-              <th>Action</th>
+              <th>Authority Action</th>
             </tr>
           </thead>
           <tbody id="requisitionTableBody">
@@ -205,7 +218,7 @@
       </div>
     </div>
 
-    <!-- TAB 3: VENDOR INWARD ENTRY (ADMIN ONLY) -->
+    <!-- TAB 3: VENDOR INWARD ENTRY (ADMIN & CLIENT) -->
     <div id="tabInward" class="tab-content">
       <div style="background:#fff3e0; border:1px solid #ffe0b2; padding:20px; border-radius:8px; margin-bottom:25px;">
         <h3 style="color:#e65100; margin-bottom:15px;">📥 Vendor Inward Stock & Challan Receipt</h3>
@@ -293,7 +306,7 @@
               <th>Removed From Location</th>
               <th>Position / Side</th>
               <th>Replacement Unit Issued</th>
-              <th>Fault Description</th>
+              <th>Client Approval Date</th>
               <th>Replaced By</th>
             </tr>
           </thead>
@@ -307,7 +320,6 @@
   </div>
 
   <script>
-    // 90 PRE-LOADED SIGNAL SYSTEM ITEMS (FROM YOUR EXCEL FILE)
     const INITIAL_90_ITEMS = [
       { id: 1, name: '12" Light 220 Volt with case (RED)', uom: 'Nos.', stock: 12 },
       { id: 2, name: '12" Light 220 Volt with case (YELLOW)', uom: 'Nos.', stock: 13 },
@@ -414,9 +426,11 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const currentUser = sessionStorage.getItem('activeUser') || 'Supervisor';
-    const userRole = sessionStorage.getItem('userRole') || 'supervisor';
+    const currentUser = sessionStorage.getItem('activeUser') || 'User';
+    const userRole = (sessionStorage.getItem('userRole') || 'supervisor').toLowerCase();
+    const isClient = (userRole === 'client' || userRole === 'master');
     const isAdmin = (userRole === 'admin');
+    const isAdminOrClient = (isAdmin || isClient);
 
     let liveInventory = [];
     let liveRequisitions = [];
@@ -425,7 +439,7 @@
     window.onload = function() {
       document.getElementById('userDisplay').innerText = `${currentUser} (${userRole.toUpperCase()})`;
       
-      if (isAdmin) {
+      if (isAdminOrClient) {
         document.getElementById('inwardTabBtn').style.display = 'block';
       }
 
@@ -516,7 +530,7 @@
       renderStockTable(filtered);
     }
 
-    // SUBMIT REQUISITION (SUPERVISOR)
+    // 1. SUPERVISOR SUBMITS REQUISITION -> Goes to Admin
     document.getElementById('requisitionForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('reqSubmitBtn');
@@ -529,7 +543,7 @@
 
       if (reqQty > item.stock) {
         alert(`❌ Requested quantity (${reqQty}) exceeds current balance stock (${item.stock})!`);
-        btn.innerText = "Submit Requisition for Admin Approval";
+        btn.innerText = "Submit Requisition (Pending Admin ➔ Client)";
         btn.disabled = false;
         return;
       }
@@ -546,16 +560,16 @@
         faultyItemName: document.getElementById('faultyName').value.trim(),
         faultyItemSerial: document.getElementById('faultySerial').value.trim() || "Unmarked",
         remarks: document.getElementById('reqRemarks').value.trim(),
-        status: "PENDING_APPROVAL",
+        status: "PENDING_ADMIN_REVIEW", // Step 1 status
         requestedBy: currentUser,
         createdAt: new Date().toISOString()
       };
 
       try {
         await db.collection("signal_requisitions").add(reqData);
-        alert("✅ Requisition submitted! Admin will review and approve.");
+        alert("✅ Requisition submitted! Admin will verify and forward to Client for final approval.");
         document.getElementById('requisitionForm').reset();
-        btn.innerText = "Submit Requisition for Admin Approval";
+        btn.innerText = "Submit Requisition (Pending Admin ➔ Client)";
         btn.disabled = false;
       } catch (err) {
         alert("Error: " + err.message);
@@ -563,11 +577,11 @@
       }
     });
 
-    // LISTEN REQUISITIONS & APPROVAL WORKFLOW
+    // 2. LISTEN REQUISITIONS & 3-TIER HIERARCHY WORKFLOW
     function listenRequisitions() {
       db.collection("signal_requisitions").orderBy("createdAt", "desc").onSnapshot(snapshot => {
         liveRequisitions = [];
-        let pendingCount = 0;
+        let pendingActionCount = 0;
         const tableBody = document.getElementById('requisitionTableBody');
         const defectiveBody = document.getElementById('defectiveTableBody');
 
@@ -575,7 +589,7 @@
         defectiveBody.innerHTML = "";
 
         if (snapshot.empty) {
-          tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#888;">No requisition entries.</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#888;">No requisition entries recorded.</td></tr>`;
           defectiveBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No defective items returned yet.</td></tr>`;
           return;
         }
@@ -587,21 +601,30 @@
           data.docId = doc.id;
           liveRequisitions.push(data);
 
-          if (data.status === "PENDING_APPROVAL") pendingCount++;
-
-          let statusBadge = data.status === "APPROVED" 
-            ? `<span class="stock-badge-ok">✅ Approved</span>` 
-            : `<span class="stock-badge-low">⏳ Pending Approval</span>`;
-
+          let statusBadge = "";
           let actionBtn = "";
-          if (data.status === "PENDING_APPROVAL") {
-            if (isAdmin) {
-              actionBtn = `<button onclick="approveRequisition('${data.docId}', ${data.itemId}, ${data.quantity})" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px;">Approve & Deduct</button>`;
+
+          if (data.status === "PENDING_ADMIN_REVIEW") {
+            statusBadge = `<span class="stock-badge-pending-admin">⏳ Pending Admin Verification</span>`;
+            if (isAdmin || isClient) {
+              pendingActionCount++;
+              actionBtn = `<button onclick="forwardToClient('${data.docId}')" class="submit-btn" style="background:#0288d1; margin:0; padding:6px 10px; font-size:11px;">Forward to Client ➔</button>`;
             } else {
-              actionBtn = `<span style="color:#f57f17; font-size:12px; font-weight:bold;">Awaiting Admin</span>`;
+              actionBtn = `<span style="color:#78909c; font-size:11px;">Awaiting Admin</span>`;
             }
-          } else {
-            actionBtn = `<span style="color:#2e7d32; font-size:12px;">Issued to Site</span>`;
+          } else if (data.status === "PENDING_CLIENT_APPROVAL") {
+            statusBadge = `<span class="stock-badge-pending-client">👑 Pending Client Approval</span>`;
+            if (isClient) {
+              pendingActionCount++;
+              actionBtn = `<button onclick="clientApproveRequisition('${data.docId}', ${data.itemId}, ${data.quantity})" class="submit-btn" style="background:#2e7d32; margin:0; padding:6px 10px; font-size:11px;">👑 Approve & Deduct</button>`;
+            } else if (isAdmin) {
+              actionBtn = `<span style="color:#0288d1; font-size:11px; font-weight:bold;">Forwarded to Client</span>`;
+            } else {
+              actionBtn = `<span style="color:#78909c; font-size:11px;">Awaiting Client</span>`;
+            }
+          } else if (data.status === "APPROVED") {
+            statusBadge = `<span class="stock-badge-ok">✅ Approved by Client</span>`;
+            actionBtn = `<small style="color:#2e7d32; font-weight:bold;">Issued to Site</small>`;
           }
 
           const row = `
@@ -630,7 +653,7 @@
                 <td>${data.location}</td>
                 <td>${data.locationSide}</td>
                 <td>${data.materialName} (${data.quantity} ${data.uom || ''})</td>
-                <td><small>${data.remarks}</small></td>
+                <td><small style="color:#2e7d32;">Approved by ${data.approvedBy || 'Client'}</small></td>
                 <td><small>${data.requestedBy}</small></td>
               </tr>
             `;
@@ -639,8 +662,8 @@
         });
 
         const badge = document.getElementById('pendingReqBadge');
-        if (pendingCount > 0) {
-          badge.innerText = pendingCount;
+        if (pendingActionCount > 0) {
+          badge.innerText = pendingActionCount;
           badge.style.display = "inline-block";
         } else {
           badge.style.display = "none";
@@ -648,16 +671,32 @@
       });
     }
 
-    // ADMIN APPROVAL LOGIC
-    async function approveRequisition(reqDocId, itemId, reqQty) {
-      if (!confirm(`Are you sure you want to approve this requisition and deduct ${reqQty} item(s) from stock?`)) return;
+    // 3. ADMIN FORWARDS TO CLIENT
+    async function forwardToClient(reqDocId) {
+      if (!confirm("Forward this verified requisition to Client (Master Authority) for final approval?")) return;
+
+      try {
+        await db.collection("signal_requisitions").doc(reqDocId).update({
+          status: "PENDING_CLIENT_APPROVAL",
+          forwardedBy: currentUser,
+          forwardedAt: new Date().toISOString()
+        });
+        alert("✅ Requisition forwarded to Client successfully!");
+      } catch (err) {
+        alert("Forwarding failed: " + err.message);
+      }
+    }
+
+    // 4. CLIENT (MASTER ID) FINAL APPROVAL & STOCK DEDUCTION
+    async function clientApproveRequisition(reqDocId, itemId, reqQty) {
+      if (!confirm(`[Client Master Authority]\nAre you sure you want to approve this material release and deduct ${reqQty} unit(s) from warehouse stock?`)) return;
 
       try {
         const itemRef = db.collection("signal_inventory").doc(itemId.toString());
         const itemSnap = await itemRef.get();
 
         if (!itemSnap.exists || itemSnap.data().stock < reqQty) {
-          alert("❌ Error: Stock is insufficient for this item!");
+          alert("❌ Error: Insufficient stock available in warehouse!");
           return;
         }
 
@@ -675,13 +714,13 @@
         });
 
         await batch.commit();
-        alert(`✅ Requisition Approved! Stock updated from ${currentData.stock} to ${updatedStock}.`);
+        alert(`✅ Material Approved & Released by Client!\nStock updated from ${currentData.stock} to ${updatedStock}.`);
       } catch (err) {
         alert("Approval failed: " + err.message);
       }
     }
 
-    // VENDOR INWARD STOCK ENTRY (ADMIN ONLY)
+    // 5. VENDOR INWARD (ADMIN & CLIENT)
     document.getElementById('inwardForm')?.addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('inwardSubmitBtn');
@@ -760,7 +799,7 @@
       });
     }
 
-    // EXCEL EXPORTS
+    // EXPORTS
     function exportStockExcel() {
       const exportData = liveInventory.map(r => ({
         "Sr. No": r.id,
@@ -785,7 +824,7 @@
         "Removed From Location": r.location,
         "Position / Side": r.locationSide,
         "Replacement Unit Issued": `${r.materialName} (${r.quantity} ${r.uom || ''})`,
-        "Fault Description": r.remarks,
+        "Approved By Client": r.approvedBy || "Client",
         "Replaced By": r.requestedBy
       }));
 
