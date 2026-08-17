@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Signal System Stock & Inventory Management</title>
+  <title>Signal System Stock & Inventory Management - Tata Steel</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- Firebase & SheetJS (Excel Engine) -->
+  <!-- Firebase SDKs & SheetJS (Excel Engine) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -82,7 +82,7 @@
     <header>
       <div class="header-left">
         <h2>Signal System Inventory & Spare Management</h2>
-        <small style="color:#607d8b;">Tata Steel Client Approval Hierarchy | WhatsApp Alerts | Auto Serial Generator</small>
+        <small style="color:#607d8b;">Tata Steel Client Approval Hierarchy | WhatsApp Alerts | Auto Serial Engine</small>
       </div>
 
       <div class="user-controls">
@@ -197,12 +197,17 @@
         </form>
       </div>
 
-      <h3 style="margin-bottom:15px; color:#1a237e;">Requisition Logs & Multi-Tier Approvals</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+        <h3 style="color:#1a237e; margin:0;">Requisition Logs & Multi-Tier Approvals</h3>
+        <!-- EXCEL EXPORT BUTTON FOR CLIENT & ADMIN -->
+        <button type="button" onclick="exportIssuedRequisitionsExcel()" class="btn-action btn-excel" style="padding:9px 16px;">📊 Export Requisition / Issued Logs (.xlsx)</button>
+      </div>
+
       <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th>#</th>
+              <th style="width:50px;">#</th>
               <th>Material</th>
               <th>Issued Serial #</th>
               <th>Date</th>
@@ -332,7 +337,7 @@
     // ADMIN WHATSAPP TARGET NUMBER
     const ADMIN_WHATSAPP_NUMBER = "918789341404";
 
-    // 90 PRE-LOADED SIGNAL SYSTEM ITEMS (WITH EXACT PATTERNS AND BALANCE COUNTS)
+    // 90 PRE-LOADED SIGNAL SYSTEM ITEMS
     const INITIAL_90_ITEMS = [
       { id: 1, name: '12" Light 220 Volt with case (RED)', uom: 'Nos.', stock: 12, prefix: '12-CASE-RED-', start_num: 101, num_len: 3, pattern_display: '12-CASE-RED-101 to 12-CASE-RED-112' },
       { id: 2, name: '12" Light 220 Volt with case (YELLOW)', uom: 'Nos.', stock: 13, prefix: '12-CASE-YELLOW-', start_num: 101, num_len: 3, pattern_display: '12-CASE-YELLOW-101 to 12-CASE-YELLOW-113' },
@@ -611,9 +616,8 @@
 
       try {
         await db.collection("signal_requisitions").add(reqData);
-        alert("✅ Requisition submitted! Sending WhatsApp Notification to Admin...");
+        alert("✅ Requisition submitted! Opening WhatsApp to notify Admin...");
 
-        // Direct WhatsApp Alert to Admin (918789341404)
         sendWhatsAppToAdmin(reqData);
 
         document.getElementById('requisitionForm').reset();
@@ -648,8 +652,9 @@
         }
 
         let defIndex = 1;
+        let reqIndex = 1;
 
-        snapshot.forEach((doc, idx) => {
+        snapshot.forEach(doc => {
           const data = doc.data();
           data.docId = doc.id;
           liveRequisitions.push(data);
@@ -682,7 +687,7 @@
 
           const row = `
             <tr>
-              <td>${idx + 1}</td>
+              <td><strong>${reqIndex++}</strong></td>
               <td><strong>${data.materialName}</strong></td>
               <td><span style="background:#e8eaf6; padding:3px 6px; border-radius:4px; font-weight:bold;">${data.issuedSerial}</span></td>
               <td>${data.dateOfIssue}</td>
@@ -735,7 +740,6 @@
           forwardedAt: new Date().toISOString()
         });
 
-        // Broadcast to WhatsApp Group / Client Channel
         const msg = encodeURIComponent(`👑 *TATA STEEL APPROVAL REQUIRED - MATERIAL REQUISITION*\n\n*Material:* ${rec.materialName}\n*Serial to Release:* ${rec.issuedSerial}\n*Location:* ${rec.location} (${rec.locationSide})\n*Defective Item Replacing:* ${rec.faultyItemName}\n*Verification:* Verified by Admin (${currentUser})\n\n_Tata Steel authority please login and approve release in portal._`);
         window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
 
@@ -907,7 +911,52 @@
       });
     }
 
-    // EXPORTS
+    // EXCEL EXPORTS
+    function exportIssuedRequisitionsExcel() {
+      if (liveRequisitions.length === 0) {
+        alert("Export karne ke liye koi Requisition / Issued record nahi mila!");
+        return;
+      }
+
+      const exportData = liveRequisitions.map((r, i) => ({
+        "Sl No.": i + 1,
+        "Material Name": r.materialName,
+        "Issued Serial #": r.issuedSerial,
+        "Date of Issue": r.dateOfIssue,
+        "Target Location": r.location,
+        "Location Side": r.locationSide,
+        "Faulty Item Replaced": r.faultyItemName,
+        "Faulty Serial #": r.faultyItemSerial,
+        "Requested By Supervisor": r.requestedBy,
+        "Approval Status": r.status,
+        "Approved By Authority": r.approvedBy || "Pending",
+        "Reason / Remarks": r.remarks,
+        "Submission Timestamp": r.createdAt
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      ws['!cols'] = [
+        { wch: 8 },  // Sl No
+        { wch: 35 }, // Material
+        { wch: 20 }, // Serial
+        { wch: 14 }, // Date
+        { wch: 18 }, // Location
+        { wch: 15 }, // Side
+        { wch: 25 }, // Faulty Item
+        { wch: 18 }, // Faulty Serial
+        { wch: 25 }, // Requested By
+        { wch: 25 }, // Status
+        { wch: 22 }, // Approved By
+        { wch: 30 }, // Remarks
+        { wch: 24 }  // Timestamp
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Requisition_Logs");
+      XLSX.writeFile(wb, `Tata_Steel_Issued_Requisitions_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
     function exportStockExcel() {
       const exportData = liveInventory.map(r => ({
         "Sr. No": r.id,
