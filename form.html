@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Log Maintenance Entry (Geo-Fenced)</title>
+  <title>Log Maintenance Entry (Audit Timestamped)</title>
   <link rel="stylesheet" href="style.css">
   
   <!-- Firebase SDKs -->
@@ -80,12 +80,12 @@
         </div>
 
         <div class="form-group">
-          <label for="maintenanceDate">Date of Maintenance *</label>
+          <label for="maintenanceDate">Date of Maintenance (Supervisor Declared) *</label>
           <input type="date" id="maintenanceDate" required onchange="calculateNextDue(this.value)">
         </div>
 
         <div class="form-group">
-          <label for="maintenanceTime">Time of Maintenance *</label>
+          <label for="maintenanceTime">Time of Maintenance (Supervisor Declared) *</label>
           <input type="time" id="maintenanceTime" required>
         </div>
 
@@ -138,12 +138,11 @@
         </div>
       </div>
 
-      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Verify GPS (50m Tolerance) & Submit Log</button>
+      <button type="submit" id="submitBtn" class="submit-btn" style="width:100%;">Submit Maintenance Log (Captures Exact Time Stamp)</button>
     </form>
   </div>
 
   <script>
-    // Registered Coordinates for ADG-01 (Your Test Coordinates)
     const REGISTERED_LOCATIONS = {
       "ADG-01": { lat: 22.758222, lng: 86.190747 }
     };
@@ -167,8 +166,10 @@
     let linkedPlanId = null;
 
     const currentUser = sessionStorage.getItem('activeUser') || 'User';
-    const userRole = sessionStorage.getItem('userRole') || 'supervisor';
+    const userRole = (sessionStorage.getItem('userRole') || 'supervisor').toLowerCase();
     const isAdmin = (userRole === 'admin');
+    const isClient = (userRole === 'client' || userRole === 'master');
+    const isBypassUser = (isAdmin || isClient);
 
     window.onload = function() {
       document.getElementById('userDisplay').innerText = `${currentUser} (${userRole.toUpperCase()})`;
@@ -176,11 +177,11 @@
       const geoBox = document.getElementById('geoAlertBox');
       const submitBtn = document.getElementById('submitBtn');
 
-      if (isAdmin) {
+      if (isBypassUser) {
         geoBox.style.background = "#fff3e0";
         geoBox.style.borderLeftColor = "#e65100";
-        geoBox.innerHTML = `🛡️ <strong>Admin Override Mode:</strong> 50m Geo-Fence Distance check is <strong>Bypassed</strong>.`;
-        submitBtn.innerText = "Submit Maintenance Log (Admin Bypass)";
+        geoBox.innerHTML = `🛡️ <strong>Admin/Client Override:</strong> 50m Geo-Fence Distance check is <strong>Bypassed</strong>.`;
+        submitBtn.innerText = "Submit Maintenance Log (Override Active)";
       } else {
         submitBtn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
       }
@@ -282,8 +283,13 @@
     document.getElementById('maintenanceForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('submitBtn');
-      btn.innerText = "Processing Geo-Verification...";
+      btn.innerText = "Verifying & Stamping Exact Timestamp...";
       btn.disabled = true;
+
+      // CAPTURE UNALTERABLE EXACT SYSTEM TIME AT CLICK INSTANT
+      const exactSubmissionDate = new Date();
+      const actualSubmitDateStr = exactSubmissionDate.toISOString().split('T')[0];
+      const actualSubmitTimeStr = exactSubmissionDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
       const selectedId = document.getElementById('systemId').value.trim().toUpperCase();
       let liveGPS = await getCurrentGPS();
@@ -291,9 +297,9 @@
       let calculatedDistance = 0;
       let geoVerified = "VERIFIED_WITHIN_50M";
 
-      if (!isAdmin) {
+      if (!isBypassUser) {
         if (!liveGPS) {
-          alert("🚨 GPS Required: Please enable phone location services to verify you are at the panel location.");
+          alert("🚨 GPS Required: Please enable location on your mobile browser.");
           btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
           btn.disabled = false;
           return;
@@ -304,17 +310,14 @@
           calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, target.lat, target.lng);
 
           if (calculatedDistance > GEO_FENCE_TOLERANCE_METERS) {
-            alert(`❌ GEO-FENCE REJECTED!\n\nYou are ${calculatedDistance} meters away from ${selectedId}.\nAllowed tolerance is maximum ${GEO_FENCE_TOLERANCE_METERS} meters.\n\nPlease stand near the equipment to submit maintenance.`);
+            alert(`❌ GEO-FENCE REJECTED!\nYou are ${calculatedDistance}m away from ${selectedId}.\nAllowed tolerance is max 50m.`);
             btn.innerText = "Verify GPS (50m Tolerance) & Submit Log";
             btn.disabled = false;
             return;
           }
         }
       } else {
-        geoVerified = "ADMIN_BYPASS";
-        if (liveGPS && REGISTERED_LOCATIONS[selectedId]) {
-          calculatedDistance = calculateDistanceInMeters(liveGPS.lat, liveGPS.lng, REGISTERED_LOCATIONS[selectedId].lat, REGISTERED_LOCATIONS[selectedId].lng);
-        }
+        geoVerified = "ADMIN_OVERRIDE";
       }
 
       const fileInput = document.getElementById('attachment');
@@ -336,8 +339,15 @@
         supervisor: document.getElementById('supervisor').value.trim(),
         systemType: document.getElementById('systemType').value,
         maintenanceType: document.getElementById('maintenanceType').value,
+        
+        // 1. Supervisor Entered Declared Time
         maintenanceDate: document.getElementById('maintenanceDate').value,
         maintenanceTime: document.getElementById('maintenanceTime').value,
+        
+        // 2. Unalterable Real System Time Audit Stamp
+        actualSubmitDate: actualSubmitDateStr,
+        actualSubmitTime: actualSubmitTimeStr,
+        
         nextDueDate: document.getElementById('nextDueDate').value,
         priority: document.getElementById('priority').value,
         status: document.getElementById('status').value,
@@ -345,15 +355,15 @@
         partNumber: document.getElementById('partNumber').value.trim() || "N/A",
         issue: document.getElementById('issue').value.trim(),
         actionTaken: document.getElementById('actionTaken').value.trim(),
-        gpsLat: liveGPS ? liveGPS.lat : "Admin Override",
-        gpsLng: liveGPS ? liveGPS.lng : "Admin Override",
+        gpsLat: liveGPS ? liveGPS.lat : "N/A",
+        gpsLng: liveGPS ? liveGPS.lng : "N/A",
         gpsMapUrl: liveGPS ? `https://www.google.com/maps?q=${liveGPS.lat},${liveGPS.lng}` : "",
         geoDistanceMeters: calculatedDistance,
         geoAuditStatus: geoVerified,
         attachmentData: base64File,
         attachmentName: fileInput.files[0] ? fileInput.files[0].name : null,
         submittedBy: currentUser,
-        createdAt: new Date().toISOString()
+        createdAt: exactSubmissionDate.toISOString()
       };
 
       try {
@@ -362,16 +372,12 @@
         if (linkedPlanId) {
           await db.collection("maintenance_plans").doc(linkedPlanId).update({
             status: "COMPLETED",
-            closedAt: new Date().toISOString(),
+            closedAt: exactSubmissionDate.toISOString(),
             closedBy: currentUser
           });
         }
 
-        const successMsg = isAdmin 
-          ? `✅ Entry Saved (Admin Override Applied)!` 
-          : `✅ GEO-FENCE PASSED (${calculatedDistance}m from panel)!\nLog Successfully Synced!`;
-        
-        alert(successMsg);
+        alert(`✅ Log Submitted!\nActual Time Captured: ${actualSubmitTimeStr}\nDeclared Time: ${record.maintenanceTime}`);
         
         if (dedicatedId) {
           window.location.href = `history.html?id=${encodeURIComponent(dedicatedId)}`;

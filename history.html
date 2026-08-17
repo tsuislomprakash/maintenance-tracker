@@ -47,18 +47,19 @@
             <th>Type</th>
             <th>Location</th>
             <th>Supervisor</th>
-            <th>Done Date & Time</th>
+            <th>Supervisor Declared Time</th>
+            <th>Actual Cloud Submit Stamp</th>
             <th>Next Due (15d)</th>
             <th>Alert Status</th>
             <th>Spares & Part #</th>
-            <th>Issue / Action</th>
+            <th>GPS Spot</th>
             <th>Attachment</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="13" style="text-align:center; padding:20px; font-weight:bold;">Connecting to Cloud Database...</td></tr>
+          <tr><td colspan="14" style="text-align:center; padding:20px; font-weight:bold;">Connecting to Cloud Database...</td></tr>
         </tbody>
       </table>
     </div>
@@ -70,72 +71,6 @@
       <span class="close-btn" onclick="closeModal('attachmentModal')">&times;</span>
       <h3 style="margin-bottom: 15px;">Attachment Preview</h3>
       <div id="attachmentContainer" style="text-align: center;"></div>
-    </div>
-  </div>
-
-  <!-- Edit Record Modal (Admin Only) -->
-  <div id="editModal" class="modal">
-    <div class="modal-content">
-      <span class="close-btn" onclick="closeModal('editModal')">&times;</span>
-      <h3 style="margin-bottom: 15px;">Edit Maintenance Record</h3>
-      <form id="editForm">
-        <input type="hidden" id="editDocId">
-
-        <div class="form-group">
-          <label>System ID</label>
-          <input type="text" id="editSystemId" readonly style="background:#eceff1;">
-        </div>
-
-        <div class="form-group">
-          <label>Location</label>
-          <input type="text" id="editLocation" required>
-        </div>
-        
-        <div class="form-group">
-          <label>Supervisor Name</label>
-          <input type="text" id="editSupervisor" required>
-        </div>
-
-        <div class="form-group">
-          <label>Date of Maintenance</label>
-          <input type="date" id="editMaintDate" required onchange="calculateEditDue(this.value)">
-        </div>
-
-        <div class="form-group">
-          <label>Next Due Date (Auto 15 Days)</label>
-          <input type="date" id="editDueDate" required style="background:#f1f8e9; font-weight:bold;">
-        </div>
-
-        <div class="form-group">
-          <label>Parts Replaced</label>
-          <input type="text" id="editPartReplaced">
-        </div>
-
-        <div class="form-group">
-          <label>Part / Serial Number</label>
-          <input type="text" id="editPartNumber">
-        </div>
-
-        <div class="form-group">
-          <label>Issue</label>
-          <textarea id="editIssue" rows="2" required></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Action Taken</label>
-          <textarea id="editAction" rows="2" required></textarea>
-        </div>
-
-        <div class="form-group">
-          <label>Status</label>
-          <select id="editStatus" required>
-            <option value="Completed">Completed</option>
-            <option value="Pending">Pending</option>
-          </select>
-        </div>
-
-        <button type="submit" class="submit-btn" style="width:100%;">Save Changes</button>
-      </form>
     </div>
   </div>
 
@@ -160,15 +95,16 @@
     window.onload = function() {
       const urlParams = new URLSearchParams(window.location.search);
       dedicatedId = urlParams.get('id');
-      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+      const role = (sessionStorage.getItem('userRole') || '').toLowerCase();
+      const isAdminOrClient = (role === 'admin' || role === 'client' || role === 'master');
 
       if (dedicatedId) {
         document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
         document.getElementById('subHeading').innerText = `Isolated timeline for ${dedicatedId.toUpperCase()}`;
         document.getElementById('filterForm').style.display = 'none';
       } else {
-        if (!isAdmin) {
-          alert("Master history is restricted. Please scan a dedicated QR or Login as Admin.");
+        if (!isAdminOrClient) {
+          alert("Master history is restricted. Please scan a dedicated QR or Login as Admin/Client.");
           window.location.href = "login.html?redirect=history.html";
           return;
         }
@@ -184,7 +120,7 @@
       const authBox = document.getElementById('authHeader');
       const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
       const user = sessionStorage.getItem('activeUser');
-      const role = sessionStorage.getItem('userRole') || '';
+      const role = (sessionStorage.getItem('userRole') || '').toUpperCase();
 
       if (dedicatedId) {
         if (isLoggedIn) {
@@ -204,16 +140,14 @@
       } else {
         if (isLoggedIn) {
           authBox.innerHTML = `
-            <span class="user-badge-info">👤 <strong>${user}</strong> (${role.toUpperCase()})</span>
+            <span class="user-badge-info">👤 <strong>${user}</strong> (${role})</span>
             <a href="index.html" class="nav-btn" style="background:#1a237e;">← Dashboard</a>
-            <a href="planner.html" class="nav-btn" style="background:#e65100;">Plans</a>
+            <a href="stock.html" class="nav-btn" style="background:#00838f;">Stock</a>
             <button onclick="switchAccount()" class="btn-switch">Switch</button>
             <button onclick="logout()" class="btn-logout">Logout</button>
           `;
         } else {
-          authBox.innerHTML = `
-            <a href="login.html?redirect=history.html" class="nav-btn">Login for Master View</a>
-          `;
+          authBox.innerHTML = `<a href="login.html?redirect=history.html" class="nav-btn">Login</a>`;
         }
       }
     }
@@ -229,7 +163,7 @@
         allCloudRecords.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         displayRecords("");
       } catch (err) {
-        document.getElementById('tableBody').innerHTML = `<tr><td colspan="13" style="color:red; text-align:center;">Failed to load cloud data: ${err.message}</td></tr>`;
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="14" style="color:red; text-align:center;">Failed to load data: ${err.message}</td></tr>`;
       }
     }
 
@@ -246,7 +180,8 @@
 
     function displayRecords(query) {
       const tableBody = document.getElementById('tableBody');
-      const isAdmin = sessionStorage.getItem('userRole') === 'admin';
+      const role = (sessionStorage.getItem('userRole') || '').toLowerCase();
+      const isAdmin = (role === 'admin' || role === 'client' || role === 'master');
       tableBody.innerHTML = "";
 
       let records = [...allCloudRecords];
@@ -272,7 +207,7 @@
       today.setHours(0,0,0,0);
 
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs recorded for this equipment.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs recorded.</td></tr>`;
         document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
         document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
         document.getElementById('totalCount').innerText = `Total Records: 0`;
@@ -296,16 +231,28 @@
           alertBadge = `<span class="status-badge badge-ok">✅ OK (${daysDiff}d left)</span>`;
         }
 
+        // Format actual unalterable system submission time
+        let actualTimeDisplay = "";
+        if (item.actualSubmitTime) {
+          actualTimeDisplay = `<strong>${item.actualSubmitDate || ''}</strong><br><span style="color:#d32f2f; font-weight:bold; font-size:12px;">🕒 ${item.actualSubmitTime}</span>`;
+        } else if (item.createdAt) {
+          const d = new Date(item.createdAt);
+          actualTimeDisplay = `<strong>${d.toISOString().split('T')[0]}</strong><br><span style="color:#d32f2f; font-weight:bold; font-size:12px;">🕒 ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>`;
+        } else {
+          actualTimeDisplay = `<small style="color:#9e9e9e;">Legacy Entry</small>`;
+        }
+
         const attachmentBtn = item.attachmentData 
           ? `<button class="btn-action btn-view" onclick="viewAttachment('${item.docId}')">📎 View</button>`
           : `<span style="color:#9e9e9e; font-size:12px;">No File</span>`;
 
-        let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">View Only</span>`;
+        const gpsBtn = item.gpsMapUrl 
+          ? `<a href="${item.gpsMapUrl}" target="_blank" class="btn-action btn-view" style="background:#00796b;">📍 Map</a>`
+          : `<span style="color:#9e9e9e; font-size:11px;">No GPS</span>`;
+
+        let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">Verified</span>`;
         if (isAdmin) {
-          actionBtns = `
-            <button class="btn-action btn-edit" onclick="openEditModal('${item.docId}')">Edit</button>
-            <button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')">Delete</button>
-          `;
+          actionBtns = `<button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')">Delete</button>`;
         }
 
         const row = `
@@ -315,11 +262,15 @@
             <td>${item.systemType}<br><small style="color:#546e7a;">(${item.maintenanceType})</small></td>
             <td>${item.location}</td>
             <td>${item.supervisor}</td>
-            <td>${item.maintenanceDate}<br><small style="color:#607d8b;">🕒 ${item.maintenanceTime || '--:--'}</small></td>
+            
+            <!-- Declared vs System Live Audit Time -->
+            <td><strong>${item.maintenanceDate}</strong><br><span style="color:#1565c0; font-weight:bold;">🕒 ${item.maintenanceTime || '--:--'}</span></td>
+            <td style="background:#fff8e1;">${actualTimeDisplay}</td>
+            
             <td>${item.nextDueDate}</td>
             <td>${alertBadge}</td>
             <td><small><strong>P:</strong> ${item.partReplaced || 'None'}<br><strong>PN:</strong> ${item.partNumber || 'N/A'}</small></td>
-            <td><small><strong>I:</strong> ${item.issue}<br><strong>A:</strong> ${item.actionTaken}</small></td>
+            <td>${gpsBtn}</td>
             <td>${attachmentBtn}</td>
             <td><strong>${item.status}</strong></td>
             <td>${actionBtns}</td>
@@ -346,8 +297,10 @@
         "Department": r.department,
         "Location": r.location,
         "Supervisor Name": r.supervisor,
-        "Maintenance Date": r.maintenanceDate,
-        "Maintenance Time": r.maintenanceTime || "",
+        "Supervisor Declared Date": r.maintenanceDate,
+        "Supervisor Declared Time": r.maintenanceTime || "",
+        "Actual Cloud Submit Date": r.actualSubmitDate || "",
+        "Actual Cloud Submit Time (Exact)": r.actualSubmitTime || "",
         "Next Due Date": r.nextDueDate,
         "Maintenance Type": r.maintenanceType,
         "Priority": r.priority,
@@ -356,14 +309,14 @@
         "Part Number / Serial": r.partNumber || "N/A",
         "Issue / Directive": r.issue,
         "Action Taken": r.actionTaken,
-        "Submission Timestamp": r.createdAt
+        "GPS Coordinates": `${r.gpsLat || ''}, ${r.gpsLng || ''}`
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Maintenance_Report");
 
-      XLSX.writeFile(workbook, `Maintenance_Report_${dedicatedId || 'Master'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(workbook, `Maintenance_Audit_Report_${dedicatedId || 'Master'}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function viewAttachment(docId) {
@@ -384,62 +337,13 @@
       document.getElementById('attachmentModal').style.display = 'block';
     }
 
-    function openEditModal(docId) {
-      const rec = allCloudRecords.find(r => r.docId === docId);
-      if (!rec) return;
-
-      document.getElementById('editDocId').value = rec.docId;
-      document.getElementById('editSystemId').value = rec.systemId || "";
-      document.getElementById('editLocation').value = rec.location || "";
-      document.getElementById('editSupervisor').value = rec.supervisor || "";
-      document.getElementById('editMaintDate').value = rec.maintenanceDate || "";
-      document.getElementById('editDueDate').value = rec.nextDueDate || "";
-      document.getElementById('editPartReplaced').value = rec.partReplaced || "";
-      document.getElementById('editPartNumber').value = rec.partNumber || "";
-      document.getElementById('editIssue').value = rec.issue || "";
-      document.getElementById('editAction').value = rec.actionTaken || "";
-      document.getElementById('editStatus').value = rec.status || "Completed";
-
-      document.getElementById('editModal').style.display = 'block';
-    }
-
-    function calculateEditDue(dateString) {
-      if (!dateString) return;
-      const d = new Date(dateString);
-      d.setDate(d.getDate() + 15);
-      document.getElementById('editDueDate').value = d.toISOString().split('T')[0];
-    }
-
-    document.getElementById('editForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      const docId = document.getElementById('editDocId').value;
-
-      try {
-        await db.collection("maintenance_records").doc(docId).update({
-          location: document.getElementById('editLocation').value.trim(),
-          supervisor: document.getElementById('editSupervisor').value.trim(),
-          maintenanceDate: document.getElementById('editMaintDate').value,
-          nextDueDate: document.getElementById('editDueDate').value,
-          partReplaced: document.getElementById('editPartReplaced').value.trim() || "None",
-          partNumber: document.getElementById('editPartNumber').value.trim() || "N/A",
-          issue: document.getElementById('editIssue').value.trim(),
-          actionTaken: document.getElementById('editAction').value.trim(),
-          status: document.getElementById('editStatus').value
-        });
-        closeModal('editModal');
-        await fetchCloudData();
-      } catch (err) {
-        alert("Error updating record: " + err.message);
-      }
-    });
-
     async function deleteRecord(docId) {
-      if (!confirm("Are you sure you want to permanently delete this cloud entry?")) return;
+      if (!confirm("Are you sure you want to delete this cloud entry?")) return;
       try {
         await db.collection("maintenance_records").doc(docId).delete();
         await fetchCloudData();
       } catch (err) {
-        alert("Error deleting record: " + err.message);
+        alert("Error deleting: " + err.message);
       }
     }
 
