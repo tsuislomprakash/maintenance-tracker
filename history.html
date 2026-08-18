@@ -3,29 +3,65 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Maintenance History & Monitoring</title>
+  <title>Maintenance History & Monitoring - Tata Steel</title>
   <link rel="stylesheet" href="style.css">
 
   <!-- Firebase & SheetJS (Excel Engine) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    .alert-summary {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .clickable-card {
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      border: 2px solid transparent;
+      user-select: none;
+    }
+    .clickable-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+    .clickable-card.active-filter {
+      border-color: #1a237e;
+      outline: 2px solid #1a237e;
+      transform: scale(1.02);
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     <header>
       <div class="header-left">
-        <h2 id="pageHeading">Maintenance History & Tracker</h2>
-        <small id="subHeading" style="color:#546e7a;"></small>
+        <h2 id="pageHeading">Maintenance History & Monitoring</h2>
+        <small id="subHeading" style="color:#546e7a;">Central Tracking across 84 Field Units (Tata Steel)</small>
       </div>
 
       <div id="authHeader" class="user-controls"></div>
     </header>
 
+    <!-- Interactive Filter Summary Cards -->
     <div class="alert-summary">
-      <div class="alert-card badge-critical" id="overdueCount">Critical Overdue: 0</div>
-      <div class="alert-card badge-due-soon" id="upcomingCount">Due Soon (Next 3 Days): 0</div>
-      <div class="alert-card badge-ok" id="totalCount">Total Records: 0</div>
+      <div class="alert-card badge-critical clickable-card" id="overdueCard" onclick="applyQuickFilter('overdue')">
+        🚨 Critical Overdue: <span id="overdueCount">0</span>
+      </div>
+      <div class="alert-card badge-due-soon clickable-card" id="dueSoonCard" onclick="applyQuickFilter('dueSoon')">
+        ⚠️ Due Soon (Next 3 Days): <span id="upcomingCount">0</span>
+      </div>
+      <div class="alert-card badge-ok clickable-card active-filter" id="totalCard" onclick="applyQuickFilter('all')">
+        📋 Total Records: <span id="totalCount">0</span>
+      </div>
+    </div>
+
+    <!-- Active Filter Info Notification -->
+    <div id="filterInfoBanner" style="display:none; background:#e8eaf6; border-left:4px solid #1a237e; padding:10px 15px; border-radius:4px; margin-bottom:15px; font-size:13px; font-weight:bold; color:#1a237e;">
+      Showing Filtered Units
     </div>
 
     <!-- Search & Export Toolbar -->
@@ -44,7 +80,7 @@
           <tr>
             <th>#</th>
             <th>System ID</th>
-            <th>Type</th>
+            <th>Equipment Type</th>
             <th>Location</th>
             <th>Supervisor</th>
             <th>Supervisor Declared Time</th>
@@ -91,20 +127,20 @@
     let allCloudRecords = [];
     let displayedRecords = [];
     let dedicatedId = null;
+    let currentFilterMode = 'all'; // 'all', 'overdue', 'dueSoon'
 
     window.onload = function() {
       const urlParams = new URLSearchParams(window.location.search);
       dedicatedId = urlParams.get('id');
       const role = (sessionStorage.getItem('userRole') || '').toLowerCase();
-      const isAdminOrClient = (role === 'admin' || role === 'client' || role === 'master');
+      const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
 
       if (dedicatedId) {
         document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
         document.getElementById('subHeading').innerText = `Isolated timeline for ${dedicatedId.toUpperCase()}`;
         document.getElementById('filterForm').style.display = 'none';
       } else {
-        if (!isAdminOrClient) {
-          alert("Master history is restricted. Please scan a dedicated QR or Login as Admin/Client.");
+        if (!isLoggedIn) {
           window.location.href = "login.html?redirect=history.html";
           return;
         }
@@ -161,32 +197,61 @@
         });
 
         allCloudRecords.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        displayRecords("");
+        applyQuickFilter(currentFilterMode);
       } catch (err) {
         document.getElementById('tableBody').innerHTML = `<tr><td colspan="14" style="color:red; text-align:center;">Failed to load data: ${err.message}</td></tr>`;
       }
     }
 
+    // Interactive Filter Switcher for the 3 Cards
+    function applyQuickFilter(mode) {
+      currentFilterMode = mode;
+
+      document.querySelectorAll('.clickable-card').forEach(card => card.classList.remove('active-filter'));
+      const banner = document.getElementById('filterInfoBanner');
+
+      if (mode === 'overdue') {
+        document.getElementById('overdueCard').classList.add('active-filter');
+        banner.style.display = 'block';
+        banner.style.background = '#ffebee';
+        banner.style.borderLeftColor = '#d32f2f';
+        banner.style.color = '#c62828';
+        banner.innerHTML = '🚨 <strong>Viewing Critical Overdue Units:</strong> Click <strong>"⚡ Execute & Log"</strong> on any unit to perform maintenance.';
+      } else if (mode === 'dueSoon') {
+        document.getElementById('dueSoonCard').classList.add('active-filter');
+        banner.style.display = 'block';
+        banner.style.background = '#fff8e1';
+        banner.style.borderLeftColor = '#f57f17';
+        banner.style.color = '#e65100';
+        banner.innerHTML = '⚠️ <strong>Viewing Units Due in Next 3 Days:</strong> Routine maintenance can be executed in advance.';
+      } else {
+        document.getElementById('totalCard').classList.add('active-filter');
+        banner.style.display = 'none';
+      }
+
+      displayRecords(document.getElementById('filterInput').value.trim());
+    }
+
     function executeSearch(e) {
       if (e) e.preventDefault();
-      const searchTerm = document.getElementById('filterInput').value.trim();
-      displayRecords(searchTerm);
+      displayRecords(document.getElementById('filterInput').value.trim());
     }
 
     function resetSearch() {
       document.getElementById('filterInput').value = "";
-      displayRecords("");
+      applyQuickFilter('all');
     }
 
     function displayRecords(query) {
       const tableBody = document.getElementById('tableBody');
       const role = (sessionStorage.getItem('userRole') || '').toLowerCase();
-      const isAdmin = (role === 'admin' || role === 'client' || role === 'master');
+      const isAdminOrClient = (role === 'admin' || role === 'client' || role === 'master');
       tableBody.innerHTML = "";
 
       let records = [...allCloudRecords];
       const normalizedQuery = (query || "").toUpperCase().replace(/\s+/g, '');
 
+      // Strict Unit Isolation for QR scanning
       if (dedicatedId) {
         records = records.filter(r => (r.systemId || "").toUpperCase().replace(/\s+/g, '') === dedicatedId.toUpperCase().replace(/\s+/g, ''));
       } else if (normalizedQuery !== "") {
@@ -199,18 +264,45 @@
         });
       }
 
-      displayedRecords = records;
-
-      let overdue = 0;
-      let upcoming = 0;
       const today = new Date();
       today.setHours(0,0,0,0);
 
+      let overdue = 0;
+      let upcoming = 0;
+
+      // Calculate global counts across all items
+      allCloudRecords.forEach(item => {
+        const dDate = new Date(item.nextDueDate);
+        dDate.setHours(0,0,0,0);
+        const diff = Math.ceil((dDate - today) / (1000 * 60 * 60 * 24));
+        if (diff < 0) overdue++;
+        else if (diff <= 3) upcoming++;
+      });
+
+      document.getElementById('overdueCount').innerText = overdue;
+      document.getElementById('upcomingCount').innerText = upcoming;
+      document.getElementById('totalCount').innerText = allCloudRecords.length;
+
+      // Apply Alert Filter if user clicked Overdue or Due Soon
+      if (currentFilterMode === 'overdue') {
+        records = records.filter(item => {
+          const dDate = new Date(item.nextDueDate);
+          dDate.setHours(0,0,0,0);
+          return Math.ceil((dDate - today) / (1000 * 60 * 60 * 24)) < 0;
+        });
+      } else if (currentFilterMode === 'dueSoon') {
+        records = records.filter(item => {
+          const dDate = new Date(item.nextDueDate);
+          dDate.setHours(0,0,0,0);
+          const diff = Math.ceil((dDate - today) / (1000 * 60 * 60 * 24));
+          return diff >= 0 && diff <= 3;
+        });
+      }
+
+      displayedRecords = records;
+
       if (records.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs recorded.</td></tr>`;
-        document.getElementById('overdueCount').innerText = `Critical Overdue: 0`;
-        document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): 0`;
-        document.getElementById('totalCount').innerText = `Total Records: 0`;
+        tableBody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs match the selected filter.</td></tr>`;
         return;
       }
 
@@ -221,17 +313,18 @@
         const daysDiff = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
 
         let alertBadge = "";
+        let isOverdueOrDueSoon = false;
+
         if (daysDiff < 0) {
           alertBadge = `<span class="status-badge badge-critical">🚨 Overdue (${Math.abs(daysDiff)}d)</span>`;
-          overdue++;
+          isOverdueOrDueSoon = true;
         } else if (daysDiff <= 3) {
           alertBadge = `<span class="status-badge badge-due-soon">⚠️ Due in ${daysDiff}d</span>`;
-          upcoming++;
+          isOverdueOrDueSoon = true;
         } else {
           alertBadge = `<span class="status-badge badge-ok">✅ OK (${daysDiff}d left)</span>`;
         }
 
-        // Format actual unalterable system submission time
         let actualTimeDisplay = "";
         if (item.actualSubmitTime) {
           actualTimeDisplay = `<strong>${item.actualSubmitDate || ''}</strong><br><span style="color:#d32f2f; font-weight:bold; font-size:12px;">🕒 ${item.actualSubmitTime}</span>`;
@@ -250,10 +343,9 @@
           ? `<a href="${item.gpsMapUrl}" target="_blank" class="btn-action btn-view" style="background:#00796b;">📍 Map</a>`
           : `<span style="color:#9e9e9e; font-size:11px;">No GPS</span>`;
 
-        let actionBtns = `<span style="color:#9e9e9e; font-size:11px;">Verified</span>`;
-        if (isAdmin) {
-          actionBtns = `<button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')">Delete</button>`;
-        }
+        // Action Buttons with Execute & Log
+        let executeBtn = `<button onclick="executeMaintenanceLog('${item.systemId}', '${item.department || ''}', '${item.location || ''}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px; background:#1b5e20;">⚡ Execute & Log</button>`;
+        let deleteBtn = isAdminOrClient ? `<button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')" style="font-size:11px; margin-top:3px;">Delete</button>` : '';
 
         const row = `
           <tr>
@@ -262,26 +354,27 @@
             <td>${item.systemType}<br><small style="color:#546e7a;">(${item.maintenanceType})</small></td>
             <td>${item.location}</td>
             <td>${item.supervisor}</td>
-            
-            <!-- Declared vs System Live Audit Time -->
             <td><strong>${item.maintenanceDate}</strong><br><span style="color:#1565c0; font-weight:bold;">🕒 ${item.maintenanceTime || '--:--'}</span></td>
             <td style="background:#fff8e1;">${actualTimeDisplay}</td>
-            
             <td>${item.nextDueDate}</td>
             <td>${alertBadge}</td>
             <td><small><strong>P:</strong> ${item.partReplaced || 'None'}<br><strong>PN:</strong> ${item.partNumber || 'N/A'}</small></td>
             <td>${gpsBtn}</td>
             <td>${attachmentBtn}</td>
             <td><strong>${item.status}</strong></td>
-            <td>${actionBtns}</td>
+            <td>
+              ${executeBtn}
+              ${deleteBtn}
+            </td>
           </tr>
         `;
         tableBody.insertAdjacentHTML('beforeend', row);
       });
+    }
 
-      document.getElementById('overdueCount').innerText = `Critical Overdue: ${overdue}`;
-      document.getElementById('upcomingCount').innerText = `Due Soon (Next 3 Days): ${upcoming}`;
-      document.getElementById('totalCount').innerText = `Total Records: ${records.length}`;
+    // Direct Quick Execution Route for Supervisor
+    function executeMaintenanceLog(systemId, dept, loc) {
+      window.location.href = `form.html?id=${encodeURIComponent(systemId)}&dept=${encodeURIComponent(dept)}&loc=${encodeURIComponent(loc)}`;
     }
 
     function exportToExcel() {
@@ -301,7 +394,7 @@
         "Supervisor Declared Time": r.maintenanceTime || "",
         "Actual Cloud Submit Date": r.actualSubmitDate || "",
         "Actual Cloud Submit Time (Exact)": r.actualSubmitTime || "",
-        "Next Due Date": r.nextDueDate,
+        "Next Due Date (15d Cycle)": r.nextDueDate,
         "Maintenance Type": r.maintenanceType,
         "Priority": r.priority,
         "Status": r.status,
@@ -316,7 +409,7 @@
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Maintenance_Report");
 
-      XLSX.writeFile(workbook, `Maintenance_Audit_Report_${dedicatedId || 'Master'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(workbook, `Tata_Steel_Maintenance_Report_${currentFilterMode.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function viewAttachment(docId) {
