@@ -39,15 +39,15 @@
   <div class="container">
     <header>
       <div class="header-left">
-        <h2 id="pageHeading">Maintenance History & Monitoring</h2>
+        <h2 id="pageHeading">Maintenance History & Tracker</h2>
         <small id="subHeading" style="color:#546e7a;">Central Tracking across 84 Field Units (Tata Steel)</small>
       </div>
 
       <div id="authHeader" class="user-controls"></div>
     </header>
 
-    <!-- Interactive Filter Summary Cards -->
-    <div class="alert-summary">
+    <!-- Master Filter Summary Cards (Hidden in Dedicated QR Scan Mode) -->
+    <div class="alert-summary" id="summaryCardsContainer">
       <div class="alert-card badge-critical clickable-card" id="overdueCard" onclick="applyQuickFilter('overdue')">
         🚨 Critical Overdue: <span id="overdueCount">0</span>
       </div>
@@ -64,7 +64,7 @@
       Showing Filtered Units
     </div>
 
-    <!-- Search & Export Toolbar -->
+    <!-- Search & Export Toolbar (Hidden in Dedicated QR Scan Mode) -->
     <form id="filterForm" onsubmit="executeSearch(event)" style="background:#e8eaf6; padding:15px; border-radius:6px; margin-bottom:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       <label for="filterInput" style="margin-bottom:0;"><strong>Search System ID:</strong></label>
       <input type="text" id="filterInput" placeholder="e.g. ADG-01, SIG-01, AVA, Gate" style="max-width:260px; padding:9px;">
@@ -78,7 +78,7 @@
       <table>
         <thead>
           <tr id="tableHeaderRow">
-            <!-- Dynamic Role-Based Headers injected by JS -->
+            <!-- Dynamic Headers based on QR or Master Login -->
           </tr>
         </thead>
         <tbody id="tableBody">
@@ -125,10 +125,15 @@
       const isLoggedIn = sessionStorage.getItem('isLoggedIn') === 'true';
 
       if (dedicatedId) {
-        document.getElementById('pageHeading').innerText = `Dedicated History: ${dedicatedId.toUpperCase()}`;
-        document.getElementById('subHeading').innerText = `Isolated timeline for ${dedicatedId.toUpperCase()}`;
+        // QR SCAN / DEPARTMENT UNIT ISOLATION MODE
+        document.getElementById('pageHeading').innerText = `Equipment Maintenance Log: ${dedicatedId.toUpperCase()}`;
+        document.getElementById('subHeading').innerText = `Live Service History for ${dedicatedId.toUpperCase()}`;
+        
+        // Hide summary cards and search form
+        document.getElementById('summaryCardsContainer').style.display = 'none';
         document.getElementById('filterForm').style.display = 'none';
       } else {
+        // MASTER CENTRAL DASHBOARD MODE
         if (!isLoggedIn) {
           window.location.href = "login.html?redirect=history.html";
           return;
@@ -144,7 +149,24 @@
 
     function setupTableHeaders() {
       const headerRow = document.getElementById('tableHeaderRow');
-      if (isAdminOrClient) {
+      
+      if (dedicatedId) {
+        // CLEAN VIEW FOR DEPARTMENT PERSON (NO ACTIONS, NO CARDS, NO TIMESTAMPS)
+        headerRow.innerHTML = `
+          <th>#</th>
+          <th>System ID</th>
+          <th>Equipment Type</th>
+          <th>Location</th>
+          <th>Supervisor</th>
+          <th>Service Date & Time</th>
+          <th>Next Due (15d)</th>
+          <th>Maintenance Status</th>
+          <th>Spares Replaced & Part #</th>
+          <th>Attachment</th>
+          <th>Work Status</th>
+        `;
+      } else if (isAdminOrClient) {
+        // ADMIN / TATA STEEL FULL VIEW
         headerRow.innerHTML = `
           <th>#</th>
           <th>System ID</th>
@@ -162,7 +184,7 @@
           <th>Actions</th>
         `;
       } else {
-        // Restricted Columns for Supervisor (Actual Time & GPS hidden)
+        // SUPERVISOR LOGGED IN VIEW
         headerRow.innerHTML = `
           <th>#</th>
           <th>System ID</th>
@@ -187,21 +209,12 @@
       const role = (sessionStorage.getItem('userRole') || '').toUpperCase();
 
       if (dedicatedId) {
-        if (isLoggedIn) {
-          authBox.innerHTML = `
-            <span class="user-badge-info">👤 <strong>${user}</strong></span>
-            <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
-            <a href="form.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn">+ New Entry</a>
-            <button onclick="switchAccount()" class="btn-switch">Switch</button>
-            <button onclick="logout()" class="btn-logout">Logout</button>
-          `;
-        } else {
-          authBox.innerHTML = `
-            <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
-            <a href="login.html?redirect=${encodeURIComponent(window.location.href)}" class="nav-btn">Login</a>
-          `;
-        }
+        // Dedicated Unit Header
+        authBox.innerHTML = `
+          <a href="device.html?id=${encodeURIComponent(dedicatedId)}" class="nav-btn" style="background:#1a237e;">← Unit Hub</a>
+        `;
       } else {
+        // Logged-in Master Header
         if (isLoggedIn) {
           authBox.innerHTML = `
             <span class="user-badge-info">👤 <strong>${user}</strong> (${role})</span>
@@ -234,29 +247,31 @@
     function applyQuickFilter(mode) {
       currentFilterMode = mode;
 
-      document.querySelectorAll('.clickable-card').forEach(card => card.classList.remove('active-filter'));
-      const banner = document.getElementById('filterInfoBanner');
+      if (!dedicatedId) {
+        document.querySelectorAll('.clickable-card').forEach(card => card.classList.remove('active-filter'));
+        const banner = document.getElementById('filterInfoBanner');
 
-      if (mode === 'overdue') {
-        document.getElementById('overdueCard').classList.add('active-filter');
-        banner.style.display = 'block';
-        banner.style.background = '#ffebee';
-        banner.style.borderLeftColor = '#d32f2f';
-        banner.style.color = '#c62828';
-        banner.innerHTML = '🚨 <strong>Viewing Critical Overdue Units:</strong> Click <strong>"⚡ Execute & Log"</strong> on any unit to perform maintenance.';
-      } else if (mode === 'dueSoon') {
-        document.getElementById('dueSoonCard').classList.add('active-filter');
-        banner.style.display = 'block';
-        banner.style.background = '#fff8e1';
-        banner.style.borderLeftColor = '#f57f17';
-        banner.style.color = '#e65100';
-        banner.innerHTML = '⚠️ <strong>Viewing Units Due in Next 3 Days:</strong> Routine maintenance can be executed in advance.';
-      } else {
-        document.getElementById('totalCard').classList.add('active-filter');
-        banner.style.display = 'none';
+        if (mode === 'overdue') {
+          document.getElementById('overdueCard').classList.add('active-filter');
+          banner.style.display = 'block';
+          banner.style.background = '#ffebee';
+          banner.style.borderLeftColor = '#d32f2f';
+          banner.style.color = '#c62828';
+          banner.innerHTML = '🚨 <strong>Viewing Critical Overdue Units:</strong> Click <strong>"⚡ Execute & Log"</strong> on any unit to perform maintenance.';
+        } else if (mode === 'dueSoon') {
+          document.getElementById('dueSoonCard').classList.add('active-filter');
+          banner.style.display = 'block';
+          banner.style.background = '#fff8e1';
+          banner.style.borderLeftColor = '#f57f17';
+          banner.style.color = '#e65100';
+          banner.innerHTML = '⚠️ <strong>Viewing Units Due in Next 3 Days:</strong> Routine maintenance can be executed in advance.';
+        } else {
+          document.getElementById('totalCard').classList.add('active-filter');
+          banner.style.display = 'none';
+        }
       }
 
-      displayRecords(document.getElementById('filterInput').value.trim());
+      displayRecords(document.getElementById('filterInput')?.value.trim() || "");
     }
 
     function executeSearch(e) {
@@ -276,6 +291,7 @@
       let records = [...allCloudRecords];
       const normalizedQuery = (query || "").toUpperCase().replace(/\s+/g, '');
 
+      // Strict Unit Filter for QR Scans
       if (dedicatedId) {
         records = records.filter(r => (r.systemId || "").toUpperCase().replace(/\s+/g, '') === dedicatedId.toUpperCase().replace(/\s+/g, ''));
       } else if (normalizedQuery !== "") {
@@ -302,30 +318,31 @@
         else if (diff <= 3) upcoming++;
       });
 
-      document.getElementById('overdueCount').innerText = overdue;
-      document.getElementById('upcomingCount').innerText = upcoming;
-      document.getElementById('totalCount').innerText = allCloudRecords.length;
+      if (!dedicatedId) {
+        document.getElementById('overdueCount').innerText = overdue;
+        document.getElementById('upcomingCount').innerText = upcoming;
+        document.getElementById('totalCount').innerText = allCloudRecords.length;
 
-      if (currentFilterMode === 'overdue') {
-        records = records.filter(item => {
-          const dDate = new Date(item.nextDueDate);
-          dDate.setHours(0,0,0,0);
-          return Math.ceil((dDate - today) / (1000 * 60 * 60 * 24)) < 0;
-        });
-      } else if (currentFilterMode === 'dueSoon') {
-        records = records.filter(item => {
-          const dDate = new Date(item.nextDueDate);
-          dDate.setHours(0,0,0,0);
-          const diff = Math.ceil((dDate - today) / (1000 * 60 * 60 * 24));
-          return diff >= 0 && diff <= 3;
-        });
+        if (currentFilterMode === 'overdue') {
+          records = records.filter(item => {
+            const dDate = new Date(item.nextDueDate);
+            dDate.setHours(0,0,0,0);
+            return Math.ceil((dDate - today) / (1000 * 60 * 60 * 24)) < 0;
+          });
+        } else if (currentFilterMode === 'dueSoon') {
+          records = records.filter(item => {
+            const dDate = new Date(item.nextDueDate);
+            dDate.setHours(0,0,0,0);
+            const diff = Math.ceil((dDate - today) / (1000 * 60 * 60 * 24));
+            return diff >= 0 && diff <= 3;
+          });
+        }
       }
 
       displayedRecords = records;
 
       if (records.length === 0) {
-        const colSpan = isAdminOrClient ? 14 : 12;
-        tableBody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs match the selected filter.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:25px; color:#888; font-weight:bold;">No maintenance logs recorded for this equipment.</td></tr>`;
         return;
       }
 
@@ -348,26 +365,37 @@
           ? `<button class="btn-action btn-view" onclick="viewAttachment('${item.docId}')">📎 View</button>`
           : `<span style="color:#9e9e9e; font-size:12px;">No File</span>`;
 
-        let executeBtn = `<button onclick="executeMaintenanceLog('${item.systemId}', '${item.department || ''}', '${item.location || ''}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px; background:#1b5e20;">⚡ Execute & Log</button>`;
-        let deleteBtn = isAdminOrClient ? `<button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')" style="font-size:11px; margin-top:3px;">Delete</button>` : '';
-
         let row = "";
 
-        if (isAdminOrClient) {
-          // ADMIN / CLIENT FULL VIEW
-          let actualTimeDisplay = "";
-          if (item.actualSubmitTime) {
-            actualTimeDisplay = `<strong>${item.actualSubmitDate || ''}</strong><br><span style="color:#d32f2f; font-weight:bold; font-size:12px;">🕒 ${item.actualSubmitTime}</span>`;
-          } else if (item.createdAt) {
-            const d = new Date(item.createdAt);
-            actualTimeDisplay = `<strong>${d.toISOString().split('T')[0]}</strong><br><span style="color:#d32f2f; font-weight:bold; font-size:12px;">🕒 ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>`;
-          } else {
-            actualTimeDisplay = `<small style="color:#9e9e9e;">Legacy Entry</small>`;
-          }
+        if (dedicatedId) {
+          // 1. DEDICATED QR UNIT VIEW (CLEAN, NO ACTION BUTTONS, NO TIMESTAMPS)
+          row = `
+            <tr>
+              <td>${index + 1}</td>
+              <td><strong>${item.systemId}</strong></td>
+              <td>${item.systemType}<br><small style="color:#546e7a;">(${item.maintenanceType})</small></td>
+              <td>${item.location}</td>
+              <td>${item.supervisor}</td>
+              <td><strong>${item.maintenanceDate}</strong><br><small style="color:#546e7a;">🕒 ${item.maintenanceTime || '--:--'}</small></td>
+              <td><strong>${item.nextDueDate}</strong></td>
+              <td>${alertBadge}</td>
+              <td><small><strong>Parts:</strong> ${item.partReplaced || 'None'}<br><strong>PN:</strong> ${item.partNumber || 'N/A'}</small></td>
+              <td>${attachmentBtn}</td>
+              <td><span class="status-badge badge-ok">${item.status}</span></td>
+            </tr>
+          `;
+        } else if (isAdminOrClient) {
+          // 2. ADMIN / CLIENT FULL AUDIT VIEW
+          let actualTimeDisplay = item.actualSubmitTime 
+            ? `<strong>${item.actualSubmitDate || ''}</strong><br><span style="color:#d32f2f; font-weight:bold; font-size:12px;">🕒 ${item.actualSubmitTime}</span>`
+            : `<small style="color:#9e9e9e;">Legacy Entry</small>`;
 
           const gpsBtn = item.gpsMapUrl 
             ? `<a href="${item.gpsMapUrl}" target="_blank" class="btn-action btn-view" style="background:#00796b;">📍 Map</a>`
             : `<span style="color:#9e9e9e; font-size:11px;">No GPS</span>`;
+
+          let executeBtn = `<button onclick="executeMaintenanceLog('${item.systemId}', '${item.department || ''}', '${item.location || ''}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px; background:#1b5e20;">⚡ Execute & Log</button>`;
+          let deleteBtn = `<button class="btn-action btn-delete" onclick="deleteRecord('${item.docId}')" style="font-size:11px; margin-top:3px;">Delete</button>`;
 
           row = `
             <tr>
@@ -391,7 +419,9 @@
             </tr>
           `;
         } else {
-          // SUPERVISOR RESTRICTED VIEW (Actual Timestamp & GPS Hidden)
+          // 3. SUPERVISOR VIEW
+          let executeBtn = `<button onclick="executeMaintenanceLog('${item.systemId}', '${item.department || ''}', '${item.location || ''}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px; background:#1b5e20;">⚡ Execute & Log</button>`;
+
           row = `
             <tr>
               <td>${index + 1}</td>
@@ -426,57 +456,30 @@
         return;
       }
 
-      let exportData = [];
-
-      if (isAdminOrClient) {
-        exportData = displayedRecords.map((r, i) => ({
-          "Sl No": i + 1,
-          "System ID": r.systemId,
-          "Equipment Type": r.systemType,
-          "Department": r.department,
-          "Location": r.location,
-          "Supervisor Name": r.supervisor,
-          "Supervisor Declared Date": r.maintenanceDate,
-          "Supervisor Declared Time": r.maintenanceTime || "",
-          "Actual Cloud Submit Date": r.actualSubmitDate || "",
-          "Actual Cloud Submit Time (Exact)": r.actualSubmitTime || "",
-          "Next Due Date (15d Cycle)": r.nextDueDate,
-          "Maintenance Type": r.maintenanceType,
-          "Priority": r.priority,
-          "Status": r.status,
-          "Parts Replaced": r.partReplaced || "None",
-          "Part Number / Serial": r.partNumber || "N/A",
-          "Issue / Directive": r.issue,
-          "Action Taken": r.actionTaken,
-          "GPS Coordinates": `${r.gpsLat || ''}, ${r.gpsLng || ''}`
-        }));
-      } else {
-        // Supervisor Excel Export (Without Audit Timestamp & GPS)
-        exportData = displayedRecords.map((r, i) => ({
-          "Sl No": i + 1,
-          "System ID": r.systemId,
-          "Equipment Type": r.systemType,
-          "Department": r.department,
-          "Location": r.location,
-          "Supervisor Name": r.supervisor,
-          "Maintenance Date": r.maintenanceDate,
-          "Maintenance Time": r.maintenanceTime || "",
-          "Next Due Date (15d Cycle)": r.nextDueDate,
-          "Maintenance Type": r.maintenanceType,
-          "Priority": r.priority,
-          "Status": r.status,
-          "Parts Replaced": r.partReplaced || "None",
-          "Part Number / Serial": r.partNumber || "N/A",
-          "Issue / Directive": r.issue,
-          "Action Taken": r.actionTaken
-        }));
-      }
+      let exportData = displayedRecords.map((r, i) => ({
+        "Sl No": i + 1,
+        "System ID": r.systemId,
+        "Equipment Type": r.systemType,
+        "Department": r.department,
+        "Location": r.location,
+        "Supervisor Name": r.supervisor,
+        "Maintenance Date": r.maintenanceDate,
+        "Maintenance Time": r.maintenanceTime || "",
+        "Next Due Date (15d Cycle)": r.nextDueDate,
+        "Maintenance Type": r.maintenanceType,
+        "Priority": r.priority,
+        "Status": r.status,
+        "Parts Replaced": r.partReplaced || "None",
+        "Part Number / Serial": r.partNumber || "N/A",
+        "Issue / Directive": r.issue,
+        "Action Taken": r.actionTaken
+      }));
 
       const worksheet = XLSX.utils.json_to_sheet(exportData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Maintenance_Report");
 
-      XLSX.writeFile(workbook, `Tata_Steel_Maintenance_Report_${currentFilterMode.toUpperCase()}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(workbook, `Tata_Steel_Maintenance_Report_${dedicatedId || 'Master'}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function viewAttachment(docId) {
