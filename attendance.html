@@ -45,12 +45,14 @@
     }
     .designation-badge {
       display: inline-block;
-      padding: 2px 7px;
+      padding: 4px 9px;
       font-size: 11px;
       font-weight: bold;
       border-radius: 4px;
       background: #e1f5fe;
       color: #0277bd;
+      border: 1px solid #b3e5fc;
+      white-space: nowrap;
     }
     .tsl-badge-inside {
       background: #e8f5e9;
@@ -118,7 +120,7 @@
       </div>
     </div>
 
-    <!-- DAILY ATTENDANCE SUMMARY RECORDS TABLE (ONE ROW PER DATE/SHIFT) -->
+    <!-- DAILY ATTENDANCE SUMMARY RECORDS TABLE -->
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
       <h3 style="color:#1a237e; margin:0;">Daily Attendance Summary Records</h3>
       <button type="button" onclick="exportAttendanceSummaryExcel()" class="btn-action btn-excel" style="padding:9px 16px;">📊 Export Attendance (.xlsx)</button>
@@ -150,10 +152,10 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL 1: ⭐ FAVOURITE TEAM ATTENDANCE MARKING MODAL (MAIN POPUP) -->
+  <!-- MODAL 1: ⭐ FAVOURITE TEAM ATTENDANCE MARKING MODAL -->
   <!-- ========================================================================= -->
   <div id="favAttendanceModal" class="modal">
-    <div class="modal-content" style="max-width:1050px;">
+    <div class="modal-content" style="max-width:1080px;">
       <span class="close-btn" onclick="closeModal('favAttendanceModal')">&times;</span>
       <h3 style="margin-bottom:4px; color:#1a237e;">⭐ Mark Daily Team Attendance (Favourite Roster)</h3>
       <p style="color:#546e7a; font-size:13px; margin-bottom:15px;">Check technicians, configure In/Out times, Half-Day & submit complete shift log.</p>
@@ -215,7 +217,7 @@
           </div>
         </div>
 
-        <!-- Table Checklist Inside Popup -->
+        <!-- Table Checklist Inside Popup (Designations are Non-Editable) -->
         <div class="table-container" style="max-height:360px; overflow-y:auto; border:1px solid #c5cae9; margin-bottom:15px;">
           <table class="roster-table">
             <thead>
@@ -223,7 +225,7 @@
                 <th style="width:40px; text-align:center;">Select</th>
                 <th>Safety Pass #</th>
                 <th>Technician Name</th>
-                <th>Designation</th>
+                <th style="text-align:center;">Assigned Role</th>
                 <th style="width:140px;">Duty Status *</th>
                 <th style="width:105px;">In-Time</th>
                 <th style="width:105px;">Out-Time</th>
@@ -245,20 +247,20 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL 2: ⚙️ MANAGE FAVOURITE MANPOWER DIRECTORY (ADD & DELETE) -->
+  <!-- MODAL 2: ⚙️ MANAGE FAVOURITE MANPOWER DIRECTORY (UNIQUE PASS VALIDATION) -->
   <!-- ========================================================================= -->
   <div id="managePoolModal" class="modal">
     <div class="modal-content" style="max-width:850px;">
       <span class="close-btn" onclick="closeModal('managePoolModal')">&times;</span>
       <h3 style="margin-bottom:5px; color:#1a237e;">⚙️ Manage Favourite Manpower List</h3>
-      <p style="color:#546e7a; font-size:13px; margin-bottom:15px;">Add new manpower with designation or delete/remove existing members.</p>
+      <p style="color:#546e7a; font-size:13px; margin-bottom:15px;">Register manpower with unique Safety Pass # and locked designation.</p>
 
       <!-- Add New Member Box -->
       <div style="background:#e3f2fd; border:1px solid #bbdefb; padding:15px; border-radius:6px; margin-bottom:20px;">
         <h4 style="margin:0 0 10px 0; color:#0d47a1;">+ Add New Manpower to Favourite List</h4>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:10px; align-items:flex-end;">
           <div>
-            <label style="font-size:12px;"><strong>Safety Pass # *</strong></label>
+            <label style="font-size:12px;"><strong>Safety Pass # (Unique) *</strong></label>
             <input type="text" id="newSafetyPass" placeholder="e.g. SP-1088, TS-4401" style="padding:7px;">
           </div>
           <div>
@@ -299,7 +301,7 @@
               <th style="width:40px;">#</th>
               <th>Safety Pass #</th>
               <th>Full Name</th>
-              <th>Designation</th>
+              <th>Designation (Locked)</th>
               <th>Default Area</th>
               <th style="width:100px; text-align:center;">Action</th>
             </tr>
@@ -344,7 +346,6 @@
   </div>
 
   <script>
-    // INITIAL DEFAULT SEED DATA WITH ALL DESIGNATIONS
     const DEFAULT_FAVOURITE_MANPOWER = [
       { safetyPass: "SP-101", name: "Ramesh Sharma", designation: "Supervisor", defaultArea: "Gate 1 - North" },
       { safetyPass: "SP-102", name: "Suresh Mahato", designation: "Technician", defaultArea: "Gate 2 - Main" },
@@ -384,14 +385,12 @@
       autoDetectTSLLocationZone();
     };
 
-    // 1. AUTO DETECT INSIDE / OUTSIDE TSL VIA GPS
+    // AUTO DETECT INSIDE / OUTSIDE TSL VIA GPS
     function autoDetectTSLLocationZone() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          
-          // Tata Steel Jamshedpur Works boundary approx ~ 22.78 to 22.82 Lat, 86.17 to 86.22 Lng
           if (lat >= 22.780000 && lat <= 22.820000 && lng >= 86.170000 && lng <= 86.230000) {
             document.getElementById('tslLocationZone').value = "Inside TSL (Plant / Works Area)";
           } else {
@@ -401,7 +400,7 @@
       }
     }
 
-    // 2. FAVOURITE POOL INITIALIZATION & REALTIME SYNC
+    // FAVOURITE POOL INITIALIZATION
     async function initFavouritePool() {
       try {
         const snapshot = await db.collection("manpower_favourite_list").orderBy("safetyPass").get();
@@ -428,7 +427,7 @@
       });
     }
 
-    // ADD MEMBER
+    // ADD MEMBER WITH STRICT UNIQUE SAFETY PASS VALIDATION
     async function addNewTechnicianToMaster() {
       const pass = document.getElementById('newSafetyPass').value.trim().toUpperCase();
       const name = document.getElementById('newTechName').value.trim();
@@ -436,12 +435,15 @@
       const area = document.getElementById('newDefaultArea').value.trim() || "General Maintenance";
 
       if (!pass || !name) {
-        alert("Please enter Safety Pass Number and Full Name.");
+        alert("Please enter both Safety Pass Number and Full Name.");
         return;
       }
 
-      if (favouritePool.some(m => m.safetyPass.toUpperCase() === pass)) {
-        alert(`Safety Pass #${pass} already exists in the favourite list.`);
+      // DUPLICATE CHECK: Safety Pass must be unique
+      const existingMember = favouritePool.find(m => (m.safetyPass || "").toUpperCase().replace(/\s+/g, '') === pass.replace(/\s+/g, ''));
+      if (existingMember) {
+        alert(`❌ DUPLICATE SAFETY PASS DETECTED!\n\nSafety Pass Number "${pass}" is already assigned to "${existingMember.name}" (${existingMember.designation || 'Technician'}).\n\nSafety Pass Number must be unique. Please enter a different number.`);
+        document.getElementById('newSafetyPass').focus();
         return;
       }
 
@@ -452,7 +454,7 @@
           designation: desig,
           defaultArea: area
         });
-        alert(`✅ ${name} (${desig}) added to favourite list!`);
+        alert(`✅ ${name} registered successfully with Role: ${desig} (Pass #${pass})!`);
         document.getElementById('newSafetyPass').value = "";
         document.getElementById('newTechName').value = "";
         document.getElementById('newDefaultArea').value = "";
@@ -461,12 +463,11 @@
       }
     }
 
-    // DELETE / REMOVE MEMBER FROM FAVOURITE LIST
+    // DELETE MEMBER FROM FAVOURITE LIST
     async function removeMemberFromFavourite(docId, name, pass) {
-      if (!confirm(`Are you sure you want to remove ${name} (${pass}) from favourite list?`)) return;
+      if (!confirm(`Are you sure you want to remove ${name} (Pass #${pass}) from favourite list?`)) return;
       try {
         await db.collection("manpower_favourite_list").doc(docId).delete();
-        alert(`🗑️ Removed ${name} from favourite list.`);
       } catch (err) {
         alert("Error deleting: " + err.message);
       }
@@ -486,7 +487,7 @@
           <tr>
             <td>${idx + 1}</td>
             <td><strong>${tech.safetyPass}</strong></td>
-            <td>${tech.name}</td>
+            <td><strong>${tech.name}</strong></td>
             <td><span class="designation-badge">${tech.designation || 'Technician'}</span></td>
             <td><small>${tech.defaultArea || 'General'}</small></td>
             <td style="text-align:center;">
@@ -500,7 +501,7 @@
       });
     }
 
-    // 3. RENDER POPUP CHECKLIST
+    // RENDER POPUP CHECKLIST (DESIGNATION REMAINS LOCKED & NON-EDITABLE)
     function renderFavModalChecklist() {
       const tbody = document.getElementById('favModalTableBody');
       tbody.innerHTML = "";
@@ -521,7 +522,7 @@
             </td>
             <td><strong>${tech.safetyPass}</strong></td>
             <td><strong>${tech.name}</strong></td>
-            <td><span class="designation-badge">${tech.designation || 'Technician'}</span></td>
+            <td style="text-align:center;"><span class="designation-badge">${tech.designation || 'Technician'}</span></td>
             <td>
               <select class="tech-status status-select-present" onchange="updateRowStatusColor(this)">
                 <option value="Present" selected>✅ Present</option>
@@ -592,7 +593,7 @@
       syncAllOutTimes(outT);
     }
 
-    // 4. SUBMIT ATTENDANCE BATCH
+    // SUBMIT ATTENDANCE BATCH
     document.getElementById('attendanceBatchForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       const btn = document.getElementById('batchSubmitBtn');
@@ -675,7 +676,7 @@
       }
     });
 
-    // 5. LISTEN ATTENDANCE BATCH HISTORY (SINGLE SUMMARY ROW PER BATCH)
+    // LISTEN ATTENDANCE BATCH HISTORY
     function listenAttendanceBatches() {
       db.collection("team_attendance_batches").orderBy("dutyDate", "desc").onSnapshot(snapshot => {
         allAttendanceBatches = [];
@@ -720,7 +721,7 @@
       });
     }
 
-    // 6. VIEW DETAILS MODAL
+    // VIEW DETAILS MODAL
     function openBatchDetailsModal(docId) {
       const batch = allAttendanceBatches.find(b => b.docId === docId);
       if (!batch) return;
@@ -756,7 +757,7 @@
       document.getElementById('detailsModal').style.display = 'block';
     }
 
-    // 7. EXCEL EXPORT
+    // EXCEL EXPORT
     function exportAttendanceSummaryExcel() {
       if (allAttendanceBatches.length === 0) {
         alert("No attendance records to export.");
