@@ -93,7 +93,7 @@
     <header>
       <div class="header-left">
         <h2>Field Team Attendance Management</h2>
-        <small style="color:#607d8b;">Tata Steel Signal Maintenance Roster | Inside/Outside TSL Geostamp</small>
+        <small style="color:#607d8b;">Tata Steel Signal Maintenance Roster | Mid-Duty Exit & Early Release</small>
       </div>
 
       <div class="user-controls">
@@ -136,12 +136,12 @@
             <th>Location Zone</th>
             <th>Total Strength</th>
             <th>Present (✅)</th>
-            <th>Half Day (🕒)</th>
+            <th>Early Exit / Half Day (🕒)</th>
             <th>Absent (❌)</th>
             <th>On Leave (⚠️)</th>
             <th>Supervisor</th>
             <th>Shift Remarks</th>
-            <th style="width:130px;">Action</th>
+            <th style="width:140px;">Action</th>
           </tr>
         </thead>
         <tbody id="attendanceSummaryTableBody">
@@ -217,7 +217,7 @@
           </div>
         </div>
 
-        <!-- Table Checklist Inside Popup (Designations are Non-Editable) -->
+        <!-- Table Checklist Inside Popup -->
         <div class="table-container" style="max-height:360px; overflow-y:auto; border:1px solid #c5cae9; margin-bottom:15px;">
           <table class="roster-table">
             <thead>
@@ -315,10 +315,10 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL 3: 👁️ VIEW FULL DETAILS OF A SINGLE DATE'S BATCH -->
+  <!-- MODAL 3: 👁️ VIEW FULL DETAILS & MID-DUTY EARLY EXIT MODAL -->
   <!-- ========================================================================= -->
   <div id="detailsModal" class="modal">
-    <div class="modal-content" style="max-width:900px;">
+    <div class="modal-content" style="max-width:980px;">
       <span class="close-btn" onclick="closeModal('detailsModal')">&times;</span>
       <h3 id="modalHeading" style="margin-bottom:4px; color:#1a237e;">Duty Attendance Breakdown</h3>
       <p id="modalSubHeading" style="color:#546e7a; font-size:13px; margin-bottom:15px;"></p>
@@ -335,13 +335,49 @@
               <th>In-Time</th>
               <th>Out-Time</th>
               <th>Duty Location</th>
-              <th>Remarks</th>
+              <th>Remarks / Exit Reason</th>
+              <th style="width:120px; text-align:center;">Action</th>
             </tr>
           </thead>
           <tbody id="modalTableBody">
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 4: 🚪 MID-DUTY EARLY OUT REASON & TIME CLOSING POPUP -->
+  <!-- ========================================================================= -->
+  <div id="earlyOutModal" class="modal" style="z-index: 1050;">
+    <div class="modal-content" style="max-width:480px; border-top: 5px solid #e65100;">
+      <span class="close-btn" onclick="closeModal('earlyOutModal')">&times;</span>
+      <h3 style="color:#e65100; margin-bottom:5px;">🚪 Mark Early Duty Exit</h3>
+      <p style="font-size:13px; color:#546e7a; margin-bottom:15px;">Close duty time and record illness or departure reason.</p>
+
+      <form id="earlyOutForm">
+        <input type="hidden" id="earlyBatchDocId">
+        <input type="hidden" id="earlyPassNo">
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label><strong>Technician:</strong></label>
+          <input type="text" id="earlyTechNameDisplay" readonly style="background:#eceff1; font-weight:bold;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label for="earlyExitTime"><strong>Actual Exit / Out Time *</strong></label>
+          <input type="time" id="earlyExitTime" required style="font-weight:bold; font-size:14px; color:#e65100;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:15px;">
+          <label for="earlyExitReason"><strong>Reason for Early Exit *</strong></label>
+          <textarea id="earlyExitReason" rows="3" placeholder="e.g. Unwell / fever reported at site, medical leave granted, personal emergency" required></textarea>
+        </div>
+
+        <button type="submit" id="earlySubmitBtn" class="submit-btn" style="width:100%; background:#e65100;">
+          Close Duty & Save Release Stamp
+        </button>
+      </form>
     </div>
   </div>
 
@@ -375,6 +411,7 @@
 
     let favouritePool = [];
     let allAttendanceBatches = [];
+    let activeDetailBatchId = null;
 
     window.onload = function() {
       document.getElementById('userDisplay').innerText = `${currentUser} (${userRole})`;
@@ -427,7 +464,7 @@
       });
     }
 
-    // ADD MEMBER WITH STRICT UNIQUE SAFETY PASS VALIDATION
+    // ADD MEMBER WITH UNIQUE CHECK
     async function addNewTechnicianToMaster() {
       const pass = document.getElementById('newSafetyPass').value.trim().toUpperCase();
       const name = document.getElementById('newTechName').value.trim();
@@ -439,10 +476,9 @@
         return;
       }
 
-      // DUPLICATE CHECK: Safety Pass must be unique
       const existingMember = favouritePool.find(m => (m.safetyPass || "").toUpperCase().replace(/\s+/g, '') === pass.replace(/\s+/g, ''));
       if (existingMember) {
-        alert(`❌ DUPLICATE SAFETY PASS DETECTED!\n\nSafety Pass Number "${pass}" is already assigned to "${existingMember.name}" (${existingMember.designation || 'Technician'}).\n\nSafety Pass Number must be unique. Please enter a different number.`);
+        alert(`❌ DUPLICATE SAFETY PASS DETECTED!\n\nSafety Pass Number "${pass}" is already assigned to "${existingMember.name}" (${existingMember.designation || 'Technician'}).\n\nPlease enter a unique Pass Number.`);
         document.getElementById('newSafetyPass').focus();
         return;
       }
@@ -501,7 +537,7 @@
       });
     }
 
-    // RENDER POPUP CHECKLIST (DESIGNATION REMAINS LOCKED & NON-EDITABLE)
+    // RENDER POPUP CHECKLIST
     function renderFavModalChecklist() {
       const tbody = document.getElementById('favModalTableBody');
       tbody.innerHTML = "";
@@ -718,25 +754,43 @@
           `;
           tbody.insertAdjacentHTML('beforeend', row);
         });
+
+        // Auto-refresh active modal view if open
+        if (activeDetailBatchId) {
+          openBatchDetailsModal(activeDetailBatchId);
+        }
       });
     }
 
-    // VIEW DETAILS MODAL
+    // VIEW DETAILS MODAL (WITH EARLY EXIT ACTION BUTTON)
     function openBatchDetailsModal(docId) {
+      activeDetailBatchId = docId;
       const batch = allAttendanceBatches.find(b => b.docId === docId);
       if (!batch) return;
 
       document.getElementById('modalHeading').innerText = `Duty Attendance: ${batch.dutyDate}`;
-      document.getElementById('modalSubHeading').innerText = `${batch.shift} | Zone: ${batch.tslLocationZone || 'Inside TSL'} | Submitted by: ${batch.submittedBy} | Strength: ${batch.totalStrength} (Present: ${batch.presentCount}, Half Day: ${batch.halfDayCount || 0}, Absent: ${batch.absentCount}, Leave: ${batch.leaveCount})`;
+      document.getElementById('modalSubHeading').innerText = `${batch.shift} | Zone: ${batch.tslLocationZone || 'Inside TSL'} | Submitted by: ${batch.submittedBy} | Strength: ${batch.totalStrength} (Present: ${batch.presentCount}, Early Out / Half Day: ${batch.halfDayCount || 0}, Absent: ${batch.absentCount}, Leave: ${batch.leaveCount})`;
 
       const tbody = document.getElementById('modalTableBody');
       tbody.innerHTML = "";
 
       (batch.rosterList || []).forEach((m, i) => {
         let badge = `<span class="status-badge badge-ok">✅ Present</span>`;
-        if (m.status === "Half Day") badge = `<span class="status-badge badge-due-soon">🕒 Half Day</span>`;
-        else if (m.status === "Absent") badge = `<span class="status-badge badge-critical">❌ Absent</span>`;
-        else if (m.status.includes("Leave")) badge = `<span style="background:#f3e5f5; color:#7b1fa2; font-weight:bold; padding:3px 8px; border-radius:4px; font-size:11px;">⚠️ ${m.status}</span>`;
+        let actionBtn = "";
+
+        if (m.status === "Half Day" || m.status.includes("Early")) {
+          badge = `<span class="status-badge badge-due-soon">🚪 Early Out (Half Day)</span>`;
+          actionBtn = `<small style="color:#e65100; font-weight:bold;">Out: ${m.outTime || '--'}</small>`;
+        } else if (m.status === "Absent") {
+          badge = `<span class="status-badge badge-critical">❌ Absent</span>`;
+          actionBtn = `<span style="color:#9e9e9e; font-size:11px;">--</span>`;
+        } else if (m.status.includes("Leave")) {
+          badge = `<span style="background:#f3e5f5; color:#7b1fa2; font-weight:bold; padding:3px 8px; border-radius:4px; font-size:11px;">⚠️ ${m.status}</span>`;
+          actionBtn = `<span style="color:#9e9e9e; font-size:11px;">--</span>`;
+        } else {
+          // Manpower is currently on duty -> Give supervisor option to mark Early Out
+          actionBtn = `<button onclick="promptEarlyExit('${docId}', '${m.safetyPass}', '${m.name}')" class="submit-btn" style="margin:0; padding:4px 8px; font-size:11px; background:#e65100;">🚪 Early Out</button>`;
+        }
 
         const row = `
           <tr>
@@ -746,9 +800,10 @@
             <td><span class="designation-badge">${m.designation || 'Technician'}</span></td>
             <td>${badge}</td>
             <td><small style="font-weight:bold;">${m.inTime || '--'}</small></td>
-            <td><small style="font-weight:bold;">${m.outTime || '--'}</small></td>
+            <td><small style="font-weight:bold; color:#d32f2f;">${m.outTime || '--'}</small></td>
             <td>${m.dutyArea}</td>
             <td><small>${m.remarks}</small></td>
+            <td style="text-align:center;">${actionBtn}</td>
           </tr>
         `;
         tbody.insertAdjacentHTML('beforeend', row);
@@ -756,6 +811,81 @@
 
       document.getElementById('detailsModal').style.display = 'block';
     }
+
+    // TRIGGER MID-DUTY EARLY EXIT POPUP
+    function promptEarlyExit(batchDocId, safetyPass, name) {
+      document.getElementById('earlyBatchDocId').value = batchDocId;
+      document.getElementById('earlyPassNo').value = safetyPass;
+      document.getElementById('earlyTechNameDisplay').value = `${name} (${safetyPass})`;
+
+      const now = new Date();
+      document.getElementById('earlyExitTime').value = now.toTimeString().substring(0, 5);
+      document.getElementById('earlyExitReason').value = "";
+
+      document.getElementById('earlyOutModal').style.display = 'block';
+    }
+
+    // PROCESS MID-DUTY EARLY EXIT SUBMISSION IN FIRESTORE
+    document.getElementById('earlyOutForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('earlySubmitBtn');
+      btn.innerText = "Closing Duty & Updating Record...";
+      btn.disabled = true;
+
+      const docId = document.getElementById('earlyBatchDocId').value;
+      const passNo = document.getElementById('earlyPassNo').value;
+      const exitTime = document.getElementById('earlyExitTime').value;
+      const reason = document.getElementById('earlyExitReason').value.trim();
+
+      const batch = allAttendanceBatches.find(b => b.docId === docId);
+      if (!batch) {
+        alert("Record not found!");
+        btn.disabled = false;
+        return;
+      }
+
+      let updatedRoster = [...batch.rosterList];
+      let presentCount = 0;
+      let halfDayCount = 0;
+      let absentCount = 0;
+      let leaveCount = 0;
+
+      updatedRoster.forEach(m => {
+        if (m.safetyPass === passNo) {
+          m.status = "Half Day";
+          m.outTime = exitTime;
+          m.remarks = m.remarks && m.remarks !== '--' 
+            ? `${m.remarks} | Early Out (${exitTime}): ${reason}` 
+            : `Early Out (${exitTime}): ${reason}`;
+        }
+
+        if (m.status === "Present") presentCount++;
+        else if (m.status === "Half Day" || m.status.includes("Early")) halfDayCount++;
+        else if (m.status === "Absent") absentCount++;
+        else leaveCount++;
+      });
+
+      try {
+        await db.collection("team_attendance_batches").doc(docId).update({
+          rosterList: updatedRoster,
+          presentCount: presentCount,
+          halfDayCount: halfDayCount,
+          absentCount: absentCount,
+          leaveCount: leaveCount,
+          lastUpdated: new Date().toISOString()
+        });
+
+        alert(`✅ Duty closed for ${passNo} at ${exitTime}!\nReason: ${reason}\nStatus updated to Half Day.`);
+        closeModal('earlyOutModal');
+        btn.innerText = "Close Duty & Save Release Stamp";
+        btn.disabled = false;
+        openBatchDetailsModal(docId);
+      } catch (err) {
+        alert("Error updating early exit: " + err.message);
+        btn.innerText = "Close Duty & Save Release Stamp";
+        btn.disabled = false;
+      }
+    });
 
     // EXCEL EXPORT
     function exportAttendanceSummaryExcel() {
@@ -780,7 +910,7 @@
             "In-Time": m.inTime || "",
             "Out-Time": m.outTime || "",
             "Assigned Gate / Location": m.dutyArea,
-            "Technician Remarks": m.remarks,
+            "Remarks / Exit Reason": m.remarks,
             "Shift Handover Remarks": batch.generalRemarks || "",
             "Logged By Supervisor": batch.submittedBy,
             "Submission Timestamp": batch.createdAt
@@ -806,6 +936,9 @@
 
     function closeModal(modalId) {
       document.getElementById(modalId).style.display = 'none';
+      if (modalId === 'detailsModal') {
+        activeDetailBatchId = null;
+      }
     }
 
     function switchAccount() {
@@ -821,6 +954,9 @@
     window.onclick = function(event) {
       if (event.target.classList.contains('modal')) {
         event.target.style.display = 'none';
+        if (event.target.id === 'detailsModal') {
+          activeDetailBatchId = null;
+        }
       }
     };
   </script>
