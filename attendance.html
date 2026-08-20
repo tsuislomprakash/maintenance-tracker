@@ -3,16 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Maintenance Team Attendance Portal</title>
+  <title>Maintenance Team Attendance Portal - Tata Steel</title>
   <link rel="stylesheet" href="style.css">
 
   <!-- Firebase & Excel Engine -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    .roster-table input, .roster-table select {
+      padding: 6px 8px;
+      font-size: 13px;
+      margin: 0;
+    }
+    .status-select-present {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      font-weight: bold;
+    }
+    .status-select-absent {
+      background-color: #ffebee;
+      color: #c62828;
+      font-weight: bold;
+    }
+    .status-select-leave {
+      background-color: #fff8e1;
+      color: #f57f17;
+      font-weight: bold;
+    }
+    .quick-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      background: #f1f8e9;
+      padding: 10px 15px;
+      border-radius: 6px;
+      border: 1px solid #c8e6c9;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .master-pool-box {
+      background: #e3f2fd;
+      border: 1px solid #bbdefb;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+    }
+  </style>
 </head>
 <body>
-  <!-- Security Guard: Must be Logged In -->
+  <!-- Security Guard -->
   <script>
     if (sessionStorage.getItem('isLoggedIn') !== 'true') {
       window.location.href = 'login.html?redirect=' + encodeURIComponent(window.location.href);
@@ -23,7 +65,7 @@
     <header>
       <div class="header-left">
         <h2>Field Team Attendance Management</h2>
-        <small style="color:#607d8b;">Daily Duty Roster & Attendance Tracking across Field Units</small>
+        <small style="color:#607d8b;">Tata Steel Signal Maintenance Roster & Batch Duty Attendance</small>
       </div>
 
       <div class="user-controls">
@@ -34,19 +76,40 @@
       </div>
     </header>
 
-    <!-- Attendance Submission Box -->
+    <!-- 1. MANPOWER MASTER DIRECTORY (ADD TECHNICIANS WITH SAFETY PASS #) -->
+    <details class="master-pool-box">
+      <summary style="font-weight:bold; color:#1565c0; cursor:pointer;">⚙️ Manage Manpower Master Pool (Register Safety Pass & Names)</summary>
+      <div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div style="flex:1; min-width:180px;">
+          <label style="font-size:12px;"><strong>Safety Pass / Gate Pass # *</strong></label>
+          <input type="text" id="newSafetyPass" placeholder="e.g. SP-88401, TS-9921" style="padding:8px;">
+        </div>
+        <div style="flex:1.5; min-width:220px;">
+          <label style="font-size:12px;"><strong>Technician Full Name *</strong></label>
+          <input type="text" id="newTechName" placeholder="e.g. Rajesh Kumar" style="padding:8px;">
+        </div>
+        <div style="flex:1; min-width:180px;">
+          <label style="font-size:12px;"><strong>Default Duty Area</strong></label>
+          <input type="text" id="newDefaultArea" placeholder="e.g. Gate 4 / Junction 2" style="padding:8px;">
+        </div>
+        <button type="button" onclick="addNewTechnicianToMaster()" class="submit-btn" style="margin:0; padding:9px 18px; font-size:13px; background:#1565c0;">+ Add to Master Pool</button>
+      </div>
+    </details>
+
+    <!-- 2. DAILY BATCH ATTENDANCE FORM -->
     <div style="background:#e8f5e9; border:1px solid #c8e6c9; padding:20px; border-radius:8px; margin-bottom:25px;">
-      <h3 style="color:#2e7d32; margin-bottom:15px;">+ Mark Daily Duty Attendance</h3>
-      <form id="attendanceForm">
+      <h3 style="color:#2e7d32; margin-bottom:15px;">+ Mark Daily Duty Attendance (Team Batch)</h3>
+      
+      <form id="attendanceBatchForm">
         <div class="form-grid">
           <div class="form-group">
-            <label for="attDate">Duty Date *</label>
-            <input type="date" id="attDate" required>
+            <label for="batchDutyDate">Duty Date *</label>
+            <input type="date" id="batchDutyDate" required>
           </div>
 
           <div class="form-group">
-            <label for="attShift">Duty Shift *</label>
-            <select id="attShift" required>
+            <label for="batchShift">Duty Shift *</label>
+            <select id="batchShift" required>
               <option value="General Shift (09:00 - 17:30)">General Shift (09:00 - 17:30)</option>
               <option value="Morning Shift (06:00 - 14:00)">Morning Shift (06:00 - 14:00)</option>
               <option value="Evening Shift (14:00 - 22:00)">Evening Shift (14:00 - 22:00)</option>
@@ -54,74 +117,110 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label for="memberName">Technician / Member Name *</label>
-            <input type="text" id="memberName" placeholder="Enter Full Name" required>
-          </div>
-
-          <div class="form-group">
-            <label for="employeeId">Emp ID / Contractor ID</label>
-            <input type="text" id="employeeId" placeholder="e.g. EMP-1042">
-          </div>
-
-          <div class="form-group">
-            <label for="attStatus">Attendance Status *</label>
-            <select id="attStatus" required>
-              <option value="Present (On Duty)">Present (On Duty)</option>
-              <option value="Absent">Absent</option>
-              <option value="On Leave">On Leave</option>
-              <option value="Half Day">Half Day</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="assignedArea">Assigned Duty Area / Gate</label>
-            <input type="text" id="assignedArea" placeholder="e.g. Gate 4, Traffic Junction, Central Hub">
-          </div>
-
           <div class="form-group full-width">
-            <label for="attRemarks">Work Description / Remarks</label>
-            <textarea id="attRemarks" rows="2" placeholder="e.g. Assigned to routine gate lubrication and signal panel inspection"></textarea>
+            <label for="batchRemarks">Shift Handover & General Duty Remarks</label>
+            <textarea id="batchRemarks" rows="2" placeholder="e.g. Routine maintenance scheduled across Gate 1-14, drop gate testing on priority"></textarea>
           </div>
         </div>
 
-        <button type="submit" id="attSubmitBtn" class="submit-btn" style="width:100%; margin-top:10px;">Submit & Geostamp Attendance</button>
+        <!-- Quick Action Toolbar -->
+        <div class="quick-bar">
+          <div>
+            <strong>Team Roster:</strong> <span id="manpowerCountDisplay">0 Technicians in Pool</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="button" onclick="setAllRosterStatus('Present')" class="nav-btn" style="background:#2e7d32; padding:6px 12px; font-size:12px;">✅ Mark All Present</button>
+            <button type="button" onclick="setAllRosterStatus('Absent')" class="nav-btn" style="background:#c62828; padding:6px 12px; font-size:12px;">❌ Mark All Absent</button>
+          </div>
+        </div>
+
+        <!-- Dynamic Manpower Checklist Table -->
+        <div class="table-container" style="max-height:380px; overflow-y:auto; margin-bottom:15px; border:1px solid #c8e6c9;">
+          <table class="roster-table">
+            <thead>
+              <tr style="background:#2e7d32; color:#fff;">
+                <th style="width:40px;">#</th>
+                <th style="width:160px;">Safety Pass #</th>
+                <th>Technician Name</th>
+                <th style="width:160px;">Attendance Status *</th>
+                <th>Assigned Duty Location / Side</th>
+                <th>Remarks / Tasks</th>
+              </tr>
+            </thead>
+            <tbody id="rosterTableBody">
+              <tr><td colspan="6" style="text-align:center; padding:20px;">Loading Master Pool...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <button type="submit" id="batchSubmitBtn" class="submit-btn" style="width:100%; font-size:15px; padding:12px;">Submit & Geostamp Complete Team Attendance</button>
       </form>
     </div>
 
-    <!-- Attendance History & Search Filter Toolbar -->
-    <h3 style="margin-bottom:15px; color:#1a237e;">Team Attendance Records</h3>
-    <form id="filterForm" onsubmit="event.preventDefault(); applyFilter();" style="background:#eceff1; padding:12px; border-radius:6px; margin-bottom:15px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-      <label for="filterInput" style="margin-bottom:0;"><strong>Search Log:</strong></label>
-      <input type="text" id="filterInput" placeholder="Search by Name, Date, Shift, Area" oninput="applyFilter()" style="max-width:280px; padding:8px;">
-      <button type="button" onclick="resetFilter()" class="nav-btn" style="background:#546e7a; padding:8px 14px;">Reset</button>
-      <button type="button" onclick="exportAttendanceExcel()" class="btn-action btn-excel" style="padding:8px 16px; margin-left:auto;">📊 Export Attendance (.xlsx)</button>
-    </form>
+    <!-- 3. TEAM ATTENDANCE SUMMARY RECORDS (ONE ROW PER DATE/SHIFT) -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+      <h3 style="color:#1a237e; margin:0;">Daily Attendance Summary Records</h3>
+      <button type="button" onclick="exportAttendanceSummaryExcel()" class="btn-action btn-excel" style="padding:9px 16px;">📊 Export Attendance (.xlsx)</button>
+    </div>
 
     <div class="table-container">
       <table>
         <thead>
           <tr>
-            <th>#</th>
+            <th style="width:50px;">#</th>
             <th>Duty Date</th>
-            <th>Member Name</th>
-            <th>Emp ID</th>
             <th>Shift</th>
-            <th>Duty Status</th>
-            <th>Assigned Area</th>
-            <th>GPS Spot</th>
-            <th>Logged By</th>
+            <th>Total Strength</th>
+            <th>Present (✅)</th>
+            <th>Absent (❌)</th>
+            <th>On Leave (⚠️)</th>
+            <th>Supervisor</th>
             <th>Remarks</th>
+            <th style="width:140px;">Action</th>
           </tr>
         </thead>
-        <tbody id="attTableBody">
-          <tr><td colspan="10" style="text-align:center; padding:20px; font-weight:bold;">Fetching attendance records...</td></tr>
+        <tbody id="attendanceSummaryTableBody">
+          <tr><td colspan="10" style="text-align:center; padding:20px;">Fetching attendance records...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
+  <!-- 4. MODAL POPUP: VIEW COMPLETE DETAILS OF A SINGLE DATE'S BATCH -->
+  <div id="detailsModal" class="modal">
+    <div class="modal-content" style="max-width:850px;">
+      <span class="close-btn" onclick="closeModal('detailsModal')">&times;</span>
+      <h3 id="modalHeading" style="margin-bottom:5px; color:#1a237e;">Duty Attendance Breakdown</h3>
+      <p id="modalSubHeading" style="color:#546e7a; font-size:13px; margin-bottom:15px;"></p>
+      
+      <div class="table-container" style="max-height:420px; overflow-y:auto;">
+        <table>
+          <thead>
+            <tr style="background:#1a237e; color:#fff;">
+              <th style="width:40px;">#</th>
+              <th>Safety Pass #</th>
+              <th>Technician Name</th>
+              <th>Status</th>
+              <th>Assigned Duty Area</th>
+              <th>Individual Remarks</th>
+            </tr>
+          </thead>
+          <tbody id="modalTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script>
+    const DEFAULT_MASTER_TECHNICIANS = [
+      { safetyPass: "SP-101", name: "Ramesh Sharma", defaultArea: "Gate 1 - North" },
+      { safetyPass: "SP-102", name: "Suresh Mahato", defaultArea: "Gate 2 - Main" },
+      { safetyPass: "SP-103", name: "Anand Verma", defaultArea: "Traffic Signal 1" },
+      { safetyPass: "SP-104", name: "Vikram Singh", defaultArea: "AVA Hub" },
+      { safetyPass: "SP-105", name: "Manoj Tudu", defaultArea: "Gate 14 - SGB Area" }
+    ];
+
     const firebaseConfig = {
       apiKey: "AIzaSyAP08KrIvlKOC0mu6CS9cyHGHtE_yMfZS4",
       authDomain: "maintenance-tracker-9232f.firebaseapp.com",
@@ -135,174 +234,291 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let allAttendance = [];
-    let filteredAttendance = [];
+    const currentUser = sessionStorage.getItem('activeUser') || 'Supervisor';
+    const userRole = (sessionStorage.getItem('userRole') || 'supervisor').toUpperCase();
+
+    let masterPool = [];
+    let allAttendanceBatches = [];
 
     window.onload = function() {
-      const user = sessionStorage.getItem('activeUser') || 'Supervisor';
-      const role = sessionStorage.getItem('userRole') || 'Supervisor';
-      document.getElementById('userDisplay').innerText = `${user} (${role.toUpperCase()})`;
+      document.getElementById('userDisplay').innerText = `${currentUser} (${userRole})`;
+      document.getElementById('batchDutyDate').value = new Date().toISOString().split('T')[0];
 
-      document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
-      fetchAttendanceLogs();
+      initMasterPool();
+      listenAttendanceBatches();
     };
 
-    function getGPSCoordinates() {
-      return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-          resolve({ lat: "N/A", lng: "N/A", mapUrl: "" });
-        } else {
-          navigator.geolocation.getCurrentPosition(
-            pos => {
-              const lat = pos.coords.latitude.toFixed(6);
-              const lng = pos.coords.longitude.toFixed(6);
-              resolve({ lat, lng, mapUrl: `https://www.google.com/maps?q=${lat},${lng}` });
-            },
-            () => resolve({ lat: "Permission Denied", lng: "N/A", mapUrl: "" }),
-            { timeout: 7000 }
-          );
+    // 1. MANPOWER MASTER DIRECTORY INITIALIZATION
+    async function initMasterPool() {
+      try {
+        const snapshot = await db.collection("manpower_master_pool").orderBy("safetyPass").get();
+        if (snapshot.empty) {
+          for (let tech of DEFAULT_MASTER_TECHNICIANS) {
+            await db.collection("manpower_master_pool").add(tech);
+          }
         }
+        listenMasterPool();
+      } catch (e) {
+        console.error("Pool Init Error:", e);
+      }
+    }
+
+    function listenMasterPool() {
+      db.collection("manpower_master_pool").onSnapshot(snapshot => {
+        masterPool = [];
+        snapshot.forEach(doc => {
+          masterPool.push({ docId: doc.id, ...doc.data() });
+        });
+        renderRosterChecklist();
       });
     }
 
-    document.getElementById('attendanceForm').addEventListener('submit', async function(e) {
+    async function addNewTechnicianToMaster() {
+      const pass = document.getElementById('newSafetyPass').value.trim().toUpperCase();
+      const name = document.getElementById('newTechName').value.trim();
+      const area = document.getElementById('newDefaultArea').value.trim() || "Field Duty";
+
+      if (!pass || !name) {
+        alert("Please enter both Safety Pass Number and Technician Name.");
+        return;
+      }
+
+      if (masterPool.some(m => m.safetyPass.toUpperCase() === pass)) {
+        alert("This Safety Pass Number is already registered in the master pool.");
+        return;
+      }
+
+      try {
+        await db.collection("manpower_master_pool").add({
+          safetyPass: pass,
+          name: name,
+          defaultArea: area
+        });
+        alert(`✅ ${name} (${pass}) added to Master Pool!`);
+        document.getElementById('newSafetyPass').value = "";
+        document.getElementById('newTechName').value = "";
+        document.getElementById('newDefaultArea').value = "";
+      } catch (err) {
+        alert("Error adding technician: " + err.message);
+      }
+    }
+
+    // 2. RENDER THE FAST MULTI-CHECKLIST TABLE
+    function renderRosterChecklist() {
+      const tbody = document.getElementById('rosterTableBody');
+      tbody.innerHTML = "";
+      document.getElementById('manpowerCountDisplay').innerText = `${masterPool.length} Technicians Registered`;
+
+      if (masterPool.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">No technicians registered. Add from above.</td></tr>`;
+        return;
+      }
+
+      masterPool.forEach((tech, idx) => {
+        const row = `
+          <tr data-pass="${tech.safetyPass}">
+            <td>${idx + 1}</td>
+            <td><strong>${tech.safetyPass}</strong></td>
+            <td><input type="text" value="${tech.name}" class="tech-name" style="font-weight:bold; background:#fafafa;" readonly></td>
+            <td>
+              <select class="tech-status status-select-present" onchange="updateStatusColor(this)">
+                <option value="Present" selected>✅ Present</option>
+                <option value="Absent">❌ Absent</option>
+                <option value="On Leave">⚠️ On Leave</option>
+                <option value="Half Day">🕒 Half Day</option>
+              </select>
+            </td>
+            <td><input type="text" value="${tech.defaultArea || ''}" class="tech-area" placeholder="Assigned Area"></td>
+            <td><input type="text" placeholder="Optional remark" class="tech-remark"></td>
+          </tr>
+        `;
+        tbody.insertAdjacentHTML('beforeend', row);
+      });
+    }
+
+    function updateStatusColor(selectElem) {
+      selectElem.className = "tech-status";
+      if (selectElem.value === "Present") selectElem.classList.add("status-select-present");
+      else if (selectElem.value === "Absent") selectElem.classList.add("status-select-absent");
+      else selectElem.classList.add("status-select-leave");
+    }
+
+    function setAllRosterStatus(status) {
+      document.querySelectorAll('.roster-table tbody tr').forEach(row => {
+        const sel = row.querySelector('.tech-status');
+        sel.value = status;
+        updateStatusColor(sel);
+      });
+    }
+
+    // 3. SUBMIT BATCH ATTENDANCE
+    document.getElementById('attendanceBatchForm').addEventListener('submit', async function(e) {
       e.preventDefault();
-      const btn = document.getElementById('attSubmitBtn');
-      btn.innerText = "Stamping GPS & Submitting...";
+      const btn = document.getElementById('batchSubmitBtn');
+      btn.innerText = "Submitting & Stamping Attendance...";
       btn.disabled = true;
 
-      const gps = await getGPSCoordinates();
+      const dutyDate = document.getElementById('batchDutyDate').value;
+      const shift = document.getElementById('batchShift').value;
+      const remarks = document.getElementById('batchRemarks').value.trim() || "Normal duty shift";
 
-      const record = {
-        dutyDate: document.getElementById('attDate').value,
-        shift: document.getElementById('attShift').value,
-        memberName: document.getElementById('memberName').value.trim(),
-        employeeId: document.getElementById('employeeId').value.trim() || "N/A",
-        status: document.getElementById('attStatus').value,
-        assignedArea: document.getElementById('assignedArea').value.trim() || "General Maintenance",
-        remarks: document.getElementById('attRemarks').value.trim() || "None",
-        gpsLat: gps.lat,
-        gpsLng: gps.lng,
-        gpsMapUrl: gps.mapUrl,
-        submittedBy: sessionStorage.getItem('activeUser') || 'Supervisor',
+      const rows = document.querySelectorAll('#rosterTableBody tr');
+      let rosterList = [];
+      let presentCount = 0;
+      let absentCount = 0;
+      let leaveCount = 0;
+
+      rows.forEach(row => {
+        const pass = row.getAttribute('data-pass');
+        const name = row.querySelector('.tech-name').value;
+        const status = row.querySelector('.tech-status').value;
+        const area = row.querySelector('.tech-area').value.trim() || "General Maintenance";
+        const remark = row.querySelector('.tech-remark').value.trim() || "--";
+
+        if (status === "Present" || status === "Half Day") presentCount++;
+        else if (status === "Absent") absentCount++;
+        else leaveCount++;
+
+        rosterList.push({
+          safetyPass: pass,
+          name: name,
+          status: status,
+          dutyArea: area,
+          remarks: remark
+        });
+      });
+
+      const batchData = {
+        dutyDate: dutyDate,
+        shift: shift,
+        totalStrength: rosterList.length,
+        presentCount: presentCount,
+        absentCount: absentCount,
+        leaveCount: leaveCount,
+        generalRemarks: remarks,
+        submittedBy: currentUser,
+        rosterList: rosterList,
         createdAt: new Date().toISOString()
       };
 
       try {
-        await db.collection("team_attendance").add(record);
-        alert("✅ Attendance Logged Successfully!");
-        document.getElementById('memberName').value = "";
-        document.getElementById('employeeId').value = "";
-        document.getElementById('assignedArea').value = "";
-        document.getElementById('attRemarks').value = "";
-        btn.innerText = "Submit & Geostamp Attendance";
+        await db.collection("team_attendance_batches").add(batchData);
+        alert(`✅ Attendance Saved for ${dutyDate} (${shift})!\nPresent: ${presentCount} | Absent: ${absentCount} | Leave: ${leaveCount}`);
+        document.getElementById('batchRemarks').value = "";
+        btn.innerText = "Submit & Geostamp Complete Team Attendance";
         btn.disabled = false;
-        fetchAttendanceLogs();
       } catch (err) {
-        alert("Error saving attendance: " + err.message);
-        btn.innerText = "Submit & Geostamp Attendance";
+        alert("Error saving attendance batch: " + err.message);
         btn.disabled = false;
       }
     });
 
-    async function fetchAttendanceLogs() {
-      try {
-        const snapshot = await db.collection("team_attendance").get();
-        allAttendance = [];
-        snapshot.forEach(doc => {
-          allAttendance.push({ id: doc.id, ...doc.data() });
-        });
+    // 4. LISTEN & RENDER BATCH SUMMARY HISTORY
+    function listenAttendanceBatches() {
+      db.collection("team_attendance_batches").orderBy("dutyDate", "desc").onSnapshot(snapshot => {
+        allAttendanceBatches = [];
+        const tbody = document.getElementById('attendanceSummaryTableBody');
+        tbody.innerHTML = "";
 
-        allAttendance.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        renderTable(allAttendance);
-      } catch (err) {
-        document.getElementById('attTableBody').innerHTML = `<tr><td colspan="10" style="color:red; text-align:center;">Failed to load attendance logs: ${err.message}</td></tr>`;
-      }
-    }
-
-    function renderTable(data) {
-      filteredAttendance = data;
-      const tableBody = document.getElementById('attTableBody');
-      tableBody.innerHTML = "";
-
-      if (data.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#888;">No attendance records found.</td></tr>`;
-        return;
-      }
-
-      data.forEach((item, index) => {
-        let statusBadge = `<span class="status-badge badge-ok">${item.status}</span>`;
-        if (item.status === "Absent") {
-          statusBadge = `<span class="status-badge badge-critical">❌ Absent</span>`;
-        } else if (item.status.includes("Leave") || item.status.includes("Half")) {
-          statusBadge = `<span class="status-badge badge-due-soon">⚠️ ${item.status}</span>`;
+        if (snapshot.empty) {
+          tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:20px; color:#888;">No attendance batch records found.</td></tr>`;
+          return;
         }
 
-        const gpsBtn = item.gpsMapUrl 
-          ? `<a href="${item.gpsMapUrl}" target="_blank" class="btn-action btn-view" style="background:#00796b; font-size:11px;">📍 View Map</a>`
-          : `<span style="color:#9e9e9e; font-size:11px;">No GPS</span>`;
+        let idx = 1;
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          data.docId = doc.id;
+          allAttendanceBatches.push(data);
 
-        const row = `
-          <tr>
-            <td>${index + 1}</td>
-            <td><strong>${item.dutyDate}</strong></td>
-            <td><strong>${item.memberName}</strong></td>
-            <td>${item.employeeId}</td>
-            <td><small>${item.shift}</small></td>
-            <td>${statusBadge}</td>
-            <td>${item.assignedArea}</td>
-            <td>${gpsBtn}</td>
-            <td><small>${item.submittedBy}</small></td>
-            <td><small>${item.remarks}</small></td>
-          </tr>
-        `;
-        tableBody.insertAdjacentHTML('beforeend', row);
+          const row = `
+            <tr>
+              <td><strong>${idx++}</strong></td>
+              <td><strong>${data.dutyDate}</strong></td>
+              <td><small>${data.shift}</small></td>
+              <td><span style="font-weight:bold; color:#1a237e;">${data.totalStrength || data.rosterList?.length || 0}</span></td>
+              <td><span class="status-badge badge-ok">${data.presentCount || 0}</span></td>
+              <td><span class="status-badge badge-critical">${data.absentCount || 0}</span></td>
+              <td><span class="status-badge badge-due-soon">${data.leaveCount || 0}</span></td>
+              <td><small>${data.submittedBy}</small></td>
+              <td><small>${data.generalRemarks || 'None'}</small></td>
+              <td>
+                <button onclick="openBatchDetailsModal('${data.docId}')" class="submit-btn" style="margin:0; padding:6px 12px; font-size:12px; background:#0288d1;">👁️ View Details</button>
+              </td>
+            </tr>
+          `;
+          tbody.insertAdjacentHTML('beforeend', row);
+        });
       });
     }
 
-    function applyFilter() {
-      const query = document.getElementById('filterInput').value.trim().toUpperCase();
-      const filtered = allAttendance.filter(item => 
-        (item.memberName || "").toUpperCase().includes(query) ||
-        (item.dutyDate || "").toUpperCase().includes(query) ||
-        (item.shift || "").toUpperCase().includes(query) ||
-        (item.assignedArea || "").toUpperCase().includes(query) ||
-        (item.employeeId || "").toUpperCase().includes(query)
-      );
-      renderTable(filtered);
+    // 5. VIEW DETAILS MODAL
+    function openBatchDetailsModal(docId) {
+      const batch = allAttendanceBatches.find(b => b.docId === docId);
+      if (!batch) return;
+
+      document.getElementById('modalHeading').innerText = `Duty Attendance: ${batch.dutyDate}`;
+      document.getElementById('modalSubHeading').innerText = `${batch.shift} | Submitted by: ${batch.submittedBy} | Strength: ${batch.totalStrength} (Present: ${batch.presentCount}, Absent: ${batch.absentCount}, Leave: ${batch.leaveCount})`;
+
+      const tbody = document.getElementById('modalTableBody');
+      tbody.innerHTML = "";
+
+      (batch.rosterList || []).forEach((m, i) => {
+        let badge = `<span class="status-badge badge-ok">✅ Present</span>`;
+        if (m.status === "Absent") badge = `<span class="status-badge badge-critical">❌ Absent</span>`;
+        else if (m.status.includes("Leave") || m.status.includes("Half")) badge = `<span class="status-badge badge-due-soon">⚠️ ${m.status}</span>`;
+
+        const row = `
+          <tr>
+            <td>${i + 1}</td>
+            <td><strong>${m.safetyPass}</strong></td>
+            <td><strong>${m.name}</strong></td>
+            <td>${badge}</td>
+            <td>${m.dutyArea}</td>
+            <td><small>${m.remarks}</small></td>
+          </tr>
+        `;
+        tbody.insertAdjacentHTML('beforeend', row);
+      });
+
+      document.getElementById('detailsModal').style.display = 'block';
     }
 
-    function resetFilter() {
-      document.getElementById('filterInput').value = "";
-      renderTable(allAttendance);
-    }
-
-    function exportAttendanceExcel() {
-      if (filteredAttendance.length === 0) {
+    // 6. EXCEL EXPORT
+    function exportAttendanceSummaryExcel() {
+      if (allAttendanceBatches.length === 0) {
         alert("No attendance records to export.");
         return;
       }
 
-      const exportData = filteredAttendance.map((r, i) => ({
-        "Sl No": i + 1,
-        "Duty Date": r.dutyDate,
-        "Member Name": r.memberName,
-        "Employee ID": r.employeeId,
-        "Duty Shift": r.shift,
-        "Attendance Status": r.status,
-        "Assigned Duty Area": r.assignedArea,
-        "Remarks": r.remarks,
-        "GPS Latitude": r.gpsLat || "N/A",
-        "GPS Longitude": r.gpsLng || "N/A",
-        "Logged By Supervisor": r.submittedBy,
-        "Logged Timestamp": r.createdAt
-      }));
+      let exportData = [];
 
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Duty_Attendance");
+      allAttendanceBatches.forEach((batch, bIdx) => {
+        (batch.rosterList || []).forEach((m, mIdx) => {
+          exportData.push({
+            "Sl No": exportData.length + 1,
+            "Duty Date": batch.dutyDate,
+            "Shift": batch.shift,
+            "Safety Pass #": m.safetyPass,
+            "Technician Name": m.name,
+            "Attendance Status": m.status,
+            "Assigned Location": m.dutyArea,
+            "Technician Remarks": m.remarks,
+            "Shift Handover Remarks": batch.generalRemarks || "",
+            "Logged By Supervisor": batch.submittedBy,
+            "Submission Timestamp": batch.createdAt
+          });
+        });
+      });
 
-      XLSX.writeFile(workbook, `Team_Attendance_${new Date().toISOString().split('T')[0]}.xlsx`);
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Attendance_Roster");
+      XLSX.writeFile(wb, `Tata_Steel_Team_Attendance_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).style.display = 'none';
     }
 
     function switchAccount() {
@@ -314,6 +530,12 @@
       sessionStorage.clear();
       window.location.href = 'index.html';
     }
+
+    window.onclick = function(event) {
+      if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+      }
+    };
   </script>
 </body>
 </html>
