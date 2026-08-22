@@ -6,7 +6,7 @@
   <title>Signal System Stock & Inventory Management - Tata Steel</title>
   <link rel="stylesheet" href="style.css">
 
-  <!-- Firebase SDKs & SheetJS (Excel Engine) -->
+  <!-- Firebase & SheetJS (Excel Engine) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -69,6 +69,22 @@
       padding: 3px 8px;
       border-radius: 4px;
     }
+    .basket-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      margin-bottom: 15px;
+      background: #ffffff;
+    }
+    .basket-table th, .basket-table td {
+      border: 1px solid #c5cae9;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    .basket-table th {
+      background: #3949ab;
+      color: #ffffff;
+    }
   </style>
 </head>
 <body>
@@ -82,7 +98,7 @@
     <header>
       <div class="header-left">
         <h2>Signal System Inventory & Spare Management</h2>
-        <small style="color:#607d8b;">Tata Steel Client Approval Hierarchy | WhatsApp Alerts | Auto Serial Engine</small>
+        <small style="color:#607d8b;">Tata Steel Client Approval Hierarchy | Multi-Item Requisition Engine</small>
       </div>
 
       <div class="user-controls">
@@ -96,7 +112,7 @@
     <!-- Navigation Tabs -->
     <div class="tab-bar">
       <button class="tab-btn active" onclick="switchTab('tabInventory')">📦 Live Balance Stock (90 Items)</button>
-      <button class="tab-btn" onclick="switchTab('tabRequisition')">📝 Requisitions & Approvals <span id="pendingReqBadge" class="counter-badge" style="position:static; margin-left:5px;">0</span></button>
+      <button class="tab-btn" onclick="switchTab('tabRequisition')">📝 Multi-Item Requisitions & Approvals <span id="pendingReqBadge" class="counter-badge" style="position:static; margin-left:5px;">0</span></button>
       <button class="tab-btn" id="inwardTabBtn" style="display:none;" onclick="switchTab('tabInward')">📥 Vendor Inward Entry (Admin/Tata Steel)</button>
       <button class="tab-btn" onclick="switchTab('tabDefective')">⚠️ Defective / Replaced Items Ledger</button>
     </div>
@@ -129,77 +145,113 @@
       </div>
     </div>
 
-    <!-- TAB 2: MATERIAL REQUISITION & 2-STEP APPROVAL -->
+    <!-- TAB 2: MULTI-ITEM REQUISITION & 2-STEP APPROVAL -->
     <div id="tabRequisition" class="tab-content">
       <div style="background:#e8eaf6; border:1px solid #c5cae9; padding:20px; border-radius:8px; margin-bottom:25px;">
-        <h3 style="color:#1a237e; margin-bottom:15px;">+ Raise Material Requisition for Replacement (Supervisor)</h3>
-        <form id="requisitionForm">
+        <h3 style="color:#1a237e; margin-bottom:15px;">+ Raise Multi-Item Requisition for Location (Supervisor)</h3>
+        
+        <!-- Header Location & Date Details -->
+        <div class="form-grid" style="background:#ffffff; padding:15px; border-radius:6px; border:1px solid #c5cae9; margin-bottom:15px;">
+          <div class="form-group">
+            <label for="reqDate">Date of Issue / Replacement *</label>
+            <input type="date" id="reqDate" required>
+          </div>
+
+          <div class="form-group">
+            <label for="reqLocation">Target Location / Gate *</label>
+            <input type="text" id="reqLocation" placeholder="e.g. ADG-01, Gate 4, Signal Post 2" required>
+          </div>
+
+          <div class="form-group">
+            <label for="reqSide">Location Side / Arm Position *</label>
+            <select id="reqSide" required>
+              <option value="Inward Side">Inward Side</option>
+              <option value="Outward Side">Outward Side</option>
+              <option value="North Arm">North Arm</option>
+              <option value="South Arm">South Arm</option>
+              <option value="East Post">East Post</option>
+              <option value="West Post">West Post</option>
+              <option value="Main Control Hub">Main Control Hub</option>
+            </select>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="reqRemarks">General Shift / Replacement Remarks *</label>
+            <textarea id="reqRemarks" rows="2" placeholder="e.g. Heavy voltage fluctuation caused relay and flasher card damage" required></textarea>
+          </div>
+        </div>
+
+        <!-- Add Items to Cart / Basket Box -->
+        <div style="background:#f1f8e9; border:1px solid #c8e6c9; padding:15px; border-radius:6px; margin-bottom:15px;">
+          <h4 style="color:#2e7d32; margin:0 0 10px 0;">📦 Select & Add Material to Requisition Basket</h4>
           <div class="form-grid">
             <div class="form-group">
-              <label for="reqMaterial">Select Material Description *</label>
-              <select id="reqMaterial" required onchange="onMaterialSelected(this.value)">
+              <label for="itemSelect">Select Material Description *</label>
+              <select id="itemSelect" onchange="onMaterialSelected(this.value)">
                 <option value="">-- Choose Stock Item --</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label for="reqSerial">Select Available Serial # *</label>
-              <select id="reqSerial" required>
-                <option value="">-- Select Available Serial --</option>
-              </select>
+              <label for="itemQty">Quantity Needed *</label>
+              <input type="number" id="itemQty" value="1" min="1" oninput="onQuantityChanged(this.value)">
             </div>
 
             <div class="form-group">
-              <label for="reqQty">Quantity Required *</label>
-              <input type="number" id="reqQty" value="1" min="1" required readonly style="background:#eceff1;">
+              <label for="itemSerialBox">Available Serial Numbers (Select or Custom)</label>
+              <div id="serialPickerContainer" style="display:flex; flex-direction:column; gap:5px;">
+                <select id="itemSerialSelect">
+                  <option value="">-- Select Available Serial --</option>
+                </select>
+              </div>
             </div>
 
             <div class="form-group">
-              <label for="reqDate">Date of Issue / Replacement *</label>
-              <input type="date" id="reqDate" required>
+              <label for="itemFaultyDesc">Faulty / Defective Item Description *</label>
+              <input type="text" id="itemFaultyDesc" placeholder="e.g. Burned Card, 24V Relay Coil Damaged">
             </div>
 
             <div class="form-group">
-              <label for="reqLocation">Target Location / Gate *</label>
-              <input type="text" id="reqLocation" placeholder="e.g. ADG-01, Gate 4, Signal Post 2" required>
+              <label for="itemFaultySerial">Faulty Item Serial / Part # (Optional)</label>
+              <input type="text" id="itemFaultySerial" placeholder="e.g. OLD-REL-101 or leave blank">
             </div>
 
-            <div class="form-group">
-              <label for="reqSide">Location Side / Arm Position *</label>
-              <select id="reqSide" required>
-                <option value="Inward Side">Inward Side</option>
-                <option value="Outward Side">Outward Side</option>
-                <option value="North Arm">North Arm</option>
-                <option value="South Arm">South Arm</option>
-                <option value="East Post">East Post</option>
-                <option value="West Post">West Post</option>
-                <option value="Main Control Hub">Main Control Hub</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="faultyName">Faulty / Defective Item Description *</label>
-              <input type="text" id="faultyName" placeholder="e.g. Burned Card, Defective 24V Relay" required>
-            </div>
-
-            <div class="form-group">
-              <label for="faultySerial">Faulty Item Serial / Part # (Optional)</label>
-              <input type="text" id="faultySerial" placeholder="e.g. OLD-CARD-992 or Unmarked">
-            </div>
-
-            <div class="form-group full-width">
-              <label for="reqRemarks">Reason for Replacement / Remarks *</label>
-              <textarea id="reqRemarks" rows="2" placeholder="Describe the fault observed" required></textarea>
+            <div class="form-group" style="display:flex; align-items:flex-end;">
+              <button type="button" onclick="addItemToBasket()" class="submit-btn" style="width:100%; margin:0; background:#2e7d32;">
+                + Add Item to Basket
+              </button>
             </div>
           </div>
+        </div>
 
-          <button type="submit" id="reqSubmitBtn" class="submit-btn" style="width:100%; margin-top:10px;">Submit Requisition & Send WhatsApp Alert to Admin</button>
-        </form>
+        <!-- Current Requisition Basket Table -->
+        <h4 style="margin:15px 0 5px 0; color:#1a237e;">🛒 Items in Current Requisition Basket:</h4>
+        <div class="table-container" style="max-height:220px; overflow-y:auto; margin-bottom:15px;">
+          <table class="basket-table">
+            <thead>
+              <tr>
+                <th style="width:40px;">#</th>
+                <th>Material Description</th>
+                <th style="width:80px;">Qty</th>
+                <th>Assigned Serial(s)</th>
+                <th>Defective Item Replacing</th>
+                <th>Faulty Serial</th>
+                <th style="width:80px; text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="basketTableBody">
+              <tr><td colspan="7" style="text-align:center; padding:15px; color:#888;">Basket is empty. Select material and click "+ Add Item to Basket".</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <button type="button" onclick="submitCompleteRequisitionBasket()" id="reqSubmitBtn" class="submit-btn" style="width:100%; font-size:15px; padding:12px;">
+          Submit Complete Requisition & Send WhatsApp Alert to Admin
+        </button>
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
         <h3 style="color:#1a237e; margin:0;">Requisition Logs & Multi-Tier Approvals</h3>
-        <!-- EXCEL EXPORT BUTTON FOR CLIENT & ADMIN -->
         <button type="button" onclick="exportIssuedRequisitionsExcel()" class="btn-action btn-excel" style="padding:9px 16px;">📊 Export Requisition / Issued Logs (.xlsx)</button>
       </div>
 
@@ -208,24 +260,23 @@
           <thead>
             <tr>
               <th style="width:50px;">#</th>
-              <th>Material</th>
-              <th>Issued Serial #</th>
+              <th>Requisition Summary</th>
+              <th>Items & Serials to Issue</th>
               <th>Date</th>
               <th>Location & Side</th>
-              <th>Faulty Item</th>
               <th>Requested By</th>
               <th>Status</th>
               <th>Authority Action</th>
             </tr>
           </thead>
           <tbody id="requisitionTableBody">
-            <tr><td colspan="9" style="text-align:center; padding:20px;">Fetching Requisition Logs...</td></tr>
+            <tr><td colspan="8" style="text-align:center; padding:20px;">Fetching Requisition Logs...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- TAB 3: VENDOR INWARD ENTRY (AUTO SERIAL INCREMENT ENGINE) -->
+    <!-- TAB 3: VENDOR INWARD ENTRY -->
     <div id="tabInward" class="tab-content">
       <div style="background:#fff3e0; border:1px solid #ffe0b2; padding:20px; border-radius:8px; margin-bottom:25px;">
         <h3 style="color:#e65100; margin-bottom:15px;">📥 Vendor Inward Stock (Auto Ascending Serial Number Generator)</h3>
@@ -319,7 +370,7 @@
               <th>Faulty Serial #</th>
               <th>Removed From Location</th>
               <th>Position / Side</th>
-              <th>Replacement Unit Issued</th>
+              <th>Replacement Units Issued</th>
               <th>Approved By</th>
               <th>Replaced By</th>
             </tr>
@@ -334,54 +385,53 @@
   </div>
 
   <script>
-    // ADMIN WHATSAPP TARGET NUMBER
     const ADMIN_WHATSAPP_NUMBER = "918789341404";
 
-    // 90 PRE-LOADED SIGNAL SYSTEM ITEMS
+    // 90 PRE-LOADED SIGNAL SYSTEM ITEMS[cite: 1]
     const INITIAL_90_ITEMS = [
-      { id: 1, name: '12" (RED) case Light 220VAC', uom: 'Nos.', stock: 12, prefix: '12-CASE-RED-', start_num: 101, num_len: 3, pattern_display: '12-CASE-RED-101' },
-      { id: 2, name: '12" (YELLOW) case Light 220VAC', uom: 'Nos.', stock: 13, prefix: '12-CASE-YELLOW-', start_num: 101, num_len: 3, pattern_display: '12-CASE-YELLOW-101 to 12-CASE-YELLOW-113' },
-      { id: 3, name: '12" (GREEN) case Light 220VAC', uom: 'Nos.', stock: 4, prefix: '12-CASE-GREEN-', start_num: 101, num_len: 3, pattern_display: '12-CASE-GREEN-101 to 12-CASE-GREEN-104' },
-      { id: 4, name: '12" (ARROW) case Light 220VAC', uom: 'Nos.', stock: 5, prefix: '12-CASE-ARROW-', start_num: 101, num_len: 3, pattern_display: '12-CASE-ARROW-101 to 12-CASE-ARROW-105' },
-      { id: 5, name: '12" (RED) card 220VAC', uom: 'Nos.', stock: 2, prefix: '12-CARD-RED-', start_num: 101, num_len: 3, pattern_display: '12-CARD-RED-101 to 12-CARD-RED-102' },
-      { id: 6, name: '12" (YELLOW) card 220VAC', uom: 'Nos.', stock: 3, prefix: '12-CARD-YELLOW-', start_num: 101, num_len: 3, pattern_display: '12-CARD-YELLOW-101 to 12-CARD-YELLOW-103' },
-      { id: 7, name: '12" (GREEN) card 220VAC', uom: 'Nos.', stock: 0, prefix: '12-CARD-GREEN-', start_num: 101, num_len: 3, pattern_display: '12-CARD-GREEN-101' },
-      { id: 8, name: '12" (ARROW) card 220VAC', uom: 'Nos.', stock: 3, prefix: '12-CARD-ARROW-', start_num: 101, num_len: 3, pattern_display: '12-CARD-ARROW-101 to 12-CARD-ARROW-103' },
-      { id: 9, name: '8" (RED) case Light 220VAC', uom: 'Nos.', stock: 0, prefix: '8-CASE-RED-', start_num: 101, num_len: 3, pattern_display: '8-CASE-RED-101' },
-      { id: 10, name: '8" (YELLOW) case Light 220VAC', uom: 'Nos.', stock: 7, prefix: '8-CASE-YELLOW-', start_num: 101, num_len: 3, pattern_display: '8-CASE-YELLOW-101 to 8-CASE-YELLOW-107' },
-      { id: 11, name: '8" (GREEN) case Light 220VAC', uom: 'Nos.', stock: 0, prefix: '8-CASE-GREEN-', start_num: 101, num_len: 3, pattern_display: '8-CASE-GREEN-101' },
-      { id: 12, name: '8" (ARROW) case Light 220VAC', uom: 'Nos.', stock: 3, prefix: '8-CASE-ARROW-', start_num: 101, num_len: 3, pattern_display: '8-CASE-ARROW-101 to 8-CASE-ARROW-103' },
-      { id: 13, name: '8" (RED) card 220VAC', uom: 'Nos.', stock: 0, prefix: '8-CARD-RED-', start_num: 101, num_len: 3, pattern_display: '8-CARD-RED-101' },
-      { id: 14, name: '8" (YELLOW) card 220VAC', uom: 'Nos.', stock: 6, prefix: '8-CARD-YELLOW-', start_num: 101, num_len: 3, pattern_display: '8-CARD-YELLOW-101 to 8-CARD-YELLOW-106' },
-      { id: 15, name: '8" (GREEN) card 220VAC', uom: 'Nos.', stock: 3, prefix: '8-CARD-GREEN-', start_num: 101, num_len: 3, pattern_display: '8-CARD-GREEN-101 to 8-CARD-GREEN-103' },
-      { id: 16, name: '8" (ARROW)card 220VAC', uom: 'Nos.', stock: 0, prefix: '8-CARD-ARROW-', start_num: 101, num_len: 3, pattern_display: '8-CARD-ARROW-101' },
+      { id: 1, name: '12" Light 220 Volt with case (RED)', uom: 'Nos.', stock: 12, prefix: '12-CASE-RED-', start_num: 101, num_len: 3, pattern_display: '12-CASE-RED-101 to 12-CASE-RED-112' },
+      { id: 2, name: '12" Light 220 Volt with case (YELLOW)', uom: 'Nos.', stock: 13, prefix: '12-CASE-YELLOW-', start_num: 101, num_len: 3, pattern_display: '12-CASE-YELLOW-101 to 12-CASE-YELLOW-113' },
+      { id: 3, name: '12" Light 220VAC with case (GREEN)', uom: 'Nos.', stock: 4, prefix: '12-CASE-GREEN-', start_num: 101, num_len: 3, pattern_display: '12-CASE-GREEN-101 to 12-CASE-GREEN-104' },
+      { id: 4, name: '12" Light 220VAC with case (ARROW)', uom: 'Nos.', stock: 5, prefix: '12-CASE-ARROW-', start_num: 101, num_len: 3, pattern_display: '12-CASE-ARROW-101 to 12-CASE-ARROW-105' },
+      { id: 5, name: '12" card 220VAC (RED)', uom: 'Nos.', stock: 2, prefix: '12-CARD-RED-', start_num: 101, num_len: 3, pattern_display: '12-CARD-RED-101 to 12-CARD-RED-102' },
+      { id: 6, name: '12" card 220VAC (YELLOW)', uom: 'Nos.', stock: 3, prefix: '12-CARD-YELLOW-', start_num: 101, num_len: 3, pattern_display: '12-CARD-YELLOW-101 to 12-CARD-YELLOW-103' },
+      { id: 7, name: '12" card 220VAC (GREEN)', uom: 'Nos.', stock: 0, prefix: '12-CARD-GREEN-', start_num: 101, num_len: 3, pattern_display: '12-CARD-GREEN-101' },
+      { id: 8, name: '12" card 220VAC (ARROW)', uom: 'Nos.', stock: 3, prefix: '12-CARD-ARROW-', start_num: 101, num_len: 3, pattern_display: '12-CARD-ARROW-101 to 12-CARD-ARROW-103' },
+      { id: 9, name: '8" Light 220VAC with case (RED)', uom: 'Nos.', stock: 0, prefix: '8-CASE-RED-', start_num: 101, num_len: 3, pattern_display: '8-CASE-RED-101' },
+      { id: 10, name: '8" Light 220VAC with case (YELLOW)', uom: 'Nos.', stock: 7, prefix: '8-CASE-YELLOW-', start_num: 101, num_len: 3, pattern_display: '8-CASE-YELLOW-101 to 8-CASE-YELLOW-107' },
+      { id: 11, name: '8" Light 220VAC with case (GREEN)', uom: 'Nos.', stock: 0, prefix: '8-CASE-GREEN-', start_num: 101, num_len: 3, pattern_display: '8-CASE-GREEN-101' },
+      { id: 12, name: '8" Light 220VAC with case (ARROW)', uom: 'Nos.', stock: 3, prefix: '8-CASE-ARROW-', start_num: 101, num_len: 3, pattern_display: '8-CASE-ARROW-101 to 8-CASE-ARROW-103' },
+      { id: 13, name: '8" card 220VAC (RED)', uom: 'Nos.', stock: 0, prefix: '8-CARD-RED-', start_num: 101, num_len: 3, pattern_display: '8-CARD-RED-101' },
+      { id: 14, name: '8" card 220VAC (YELLOW)', uom: 'Nos.', stock: 6, prefix: '8-CARD-YELLOW-', start_num: 101, num_len: 3, pattern_display: '8-CARD-YELLOW-101 to 8-CARD-YELLOW-106' },
+      { id: 15, name: '8" card 220VAC (GREEN)', uom: 'Nos.', stock: 3, prefix: '8-CARD-GREEN-', start_num: 101, num_len: 3, pattern_display: '8-CARD-GREEN-101 to 8-CARD-GREEN-103' },
+      { id: 16, name: '8" card 220VAC (ARROW)', uom: 'Nos.', stock: 0, prefix: '8-CARD-ARROW-', start_num: 101, num_len: 3, pattern_display: '8-CARD-ARROW-101' },
       { id: 17, name: '5 Aspect Light (12")', uom: 'Nos.', stock: 2, prefix: '12-ASP-', start_num: 101, num_len: 3, pattern_display: '12-ASP-101 to 12-ASP-102' },
       { id: 18, name: '5 Aspect Light (8")', uom: 'Nos.', stock: 1, prefix: '8-ASP-', start_num: 101, num_len: 3, pattern_display: '8-ASP-101' },
-      { id: 19, name: 'G-4000 (4M) Boom', uom: 'Nos.', stock: 5, prefix: 'BOOM-G4000-4M-', start_num: 101, num_len: 3, pattern_display: 'BOOM-G4000-4M-101 to BOOM-G4000-4M-105' },
-      { id: 20, name: 'G-6000 (3M) Boom ', uom: 'Nos.', stock: 6, prefix: 'BOOM-G6000-3M-', start_num: 101, num_len: 3, pattern_display: 'BOOM-G6000-3M-101 to BOOM-G6000-3M-106' },
-      { id: 21, name: 'G-6000 (4M) Boom ', uom: 'Nos.', stock: 6, prefix: 'BOOM-G6000-4M-', start_num: 101, num_len: 3, pattern_display: 'BOOM-G6000-4M-101 to BOOM-G6000-4M-106' },
-      { id: 22, name: '2" Round (4M) Boom ', uom: 'Nos.', stock: 3, prefix: 'BOOM-ROUND-2"-', start_num: 101, num_len: 3, pattern_display: 'BOOM-ROUND-2"-101 to BOOM-ROUND-2"-103' },
+      { id: 19, name: 'Boom G-4000 (4M)', uom: 'Nos.', stock: 5, prefix: 'BOOM-G4000-4M-', start_num: 101, num_len: 3, pattern_display: 'BOOM-G4000-4M-101 to BOOM-G4000-4M-105' },
+      { id: 20, name: 'Boom G-6000 (3M)', uom: 'Nos.', stock: 6, prefix: 'BOOM-G6000-3M-', start_num: 101, num_len: 3, pattern_display: 'BOOM-G6000-3M-101 to BOOM-G6000-3M-106' },
+      { id: 21, name: 'Boom G-6000 (4M)', uom: 'Nos.', stock: 6, prefix: 'BOOM-G6000-4M-', start_num: 101, num_len: 3, pattern_display: 'BOOM-G6000-4M-101 to BOOM-G6000-4M-106' },
+      { id: 22, name: 'Boom 2" Round (4M)', uom: 'Nos.', stock: 3, prefix: 'BOOM-ROUND-2"-', start_num: 101, num_len: 3, pattern_display: 'BOOM-ROUND-2"-101 to BOOM-ROUND-2"-103' },
       { id: 23, name: 'BOOM JOINTER', uom: 'Nos.', stock: 2, prefix: 'BOOM-JOINTER-', start_num: 101, num_len: 3, pattern_display: 'BOOM-JOINTER-101 to BOOM-JOINTER-102' },
-      { id: 24, name: 'DG G-4000', uom: 'Nos.', stock: 1, prefix: 'DG4000-', start_num: 101, num_len: 3, pattern_display: 'DG4000-101' },
-      { id: 25, name: 'DG G-6000', uom: 'Nos.', stock: 2, prefix: 'DG6000-', start_num: 101, num_len: 3, pattern_display: 'DG6000-101 to DG6000-102' },
-      { id: 26, name: 'DG Control card', uom: 'Nos.', stock: 6, prefix: 'DG-CARD-', start_num: 101, num_len: 3, pattern_display: 'DG-CARD-101 to DG-CARD-106' },
+      { id: 24, name: 'Drop Gate G-4000', uom: 'Nos.', stock: 1, prefix: 'DG4000-', start_num: 101, num_len: 3, pattern_display: 'DG4000-101' },
+      { id: 25, name: 'Drop Gate G-6000', uom: 'Nos.', stock: 2, prefix: 'DG6000-', start_num: 101, num_len: 3, pattern_display: 'DG6000-101 to DG6000-102' },
+      { id: 26, name: 'Drop Gate Control card', uom: 'Nos.', stock: 6, prefix: 'DG-CARD-', start_num: 101, num_len: 3, pattern_display: 'DG-CARD-101 to DG-CARD-106' },
       { id: 27, name: 'Control Panel', uom: 'Nos.', stock: 1, prefix: 'CONTROL PANEL-', start_num: 101, num_len: 3, pattern_display: 'CONTROL PANEL-101' },
       { id: 28, name: 'Relay 24VAC', uom: 'Nos.', stock: 12, prefix: 'RELAY24VAC-', start_num: 101, num_len: 3, pattern_display: 'RELAY24VAC-101 to RELAY24VAC-112' },
       { id: 29, name: 'Relay 24VDC', uom: 'Nos.', stock: 2, prefix: 'RELAY24VDC-', start_num: 101, num_len: 3, pattern_display: 'RELAY24VDC-101 to RELAY24VDC-102' },
       { id: 30, name: 'Relay 240VAC', uom: 'Nos.', stock: 3, prefix: 'RELAY240VAC-', start_num: 101, num_len: 3, pattern_display: 'RELAY240VAC-101 to RELAY240VAC-103' },
-      { id: 31, name: '2CO RELAY 24VDC With Base', uom: 'Nos.', stock: 13, prefix: 'RELAY-2CO-24VDC-', start_num: 101, num_len: 3, pattern_display: 'RELAY-2CO-24VDC-101 to RELAY-2CO-24VDC-113' },
-      { id: 32, name: '4CO RELAY 24VDC With Base', uom: 'Nos.', stock: 13, prefix: 'RELAY-4CO-24VDC-', start_num: 101, num_len: 3, pattern_display: 'RELAY-4CO-24VDC-101 to RELAY-4CO-24VDC-113' },
-      { id: 33, name: '4C Relay Card', uom: 'Nos.', stock: 4, prefix: 'RELAY-4C-CARD-', start_num: 101, num_len: 3, pattern_display: 'RELAY-4C-CARD-101 to RELAY-4C-CARD-104' },
-      { id: 34, name: '8C Relay Card', uom: 'Nos.', stock: 5, prefix: 'RELAY-8C-CARD-', start_num: 101, num_len: 3, pattern_display: 'RELAY-8C-CARD-101 to RELAY-8C-CARD-105' },
+      { id: 31, name: 'RELAY 2CO 24VDC With Base', uom: 'Nos.', stock: 13, prefix: 'RELAY-2CO-24VDC-', start_num: 101, num_len: 3, pattern_display: 'RELAY-2CO-24VDC-101 to RELAY-2CO-24VDC-113' },
+      { id: 32, name: 'RELAY 4CO 24VDC With Base', uom: 'Nos.', stock: 13, prefix: 'RELAY-4CO-24VDC-', start_num: 101, num_len: 3, pattern_display: 'RELAY-4CO-24VDC-101 to RELAY-4CO-24VDC-113' },
+      { id: 33, name: 'Relay Card 4C', uom: 'Nos.', stock: 4, prefix: 'RELAY-4C-CARD-', start_num: 101, num_len: 3, pattern_display: 'RELAY-4C-CARD-101 to RELAY-4C-CARD-104' },
+      { id: 34, name: 'Relay Card 8C', uom: 'Nos.', stock: 5, prefix: 'RELAY-8C-CARD-', start_num: 101, num_len: 3, pattern_display: 'RELAY-8C-CARD-101 to RELAY-8C-CARD-105' },
       { id: 35, name: 'Cable 7C X 1.5 sqM', uom: 'Mtr.', stock: 1211, prefix: '7C-CABLE-', start_num: 1, num_len: 2, pattern_display: '7C-CABLE-01 to 7C-CABLE-1211' },
       { id: 36, name: 'Cable 5 Core Flexible Cable', uom: 'Mtr.', stock: 134, prefix: '5C-CABLE-', start_num: 1, num_len: 2, pattern_display: '5C-CABLE-01 to 5C-CABLE-134' },
       { id: 37, name: 'Cable 3 Core Flexible Cable', uom: 'Mtr.', stock: 0, prefix: '3C-CABLE-', start_num: 1, num_len: 2, pattern_display: '3C-CABLE-01' },
-      { id: 38, name: "9' Signal Light Post", uom: 'Nos.', stock: 3, prefix: 'LIGHT-POLE-', start_num: 101, num_len: 3, pattern_display: 'LIGHT-POLE-101 to LIGHT-POLE-103' },
-      { id: 39, name: "6' Sensor Post", uom: 'Nos.', stock: 0, prefix: 'SENSOR-POLE-', start_num: 101, num_len: 3, pattern_display: 'SENSOR-POLE-101' },
-      { id: 40, name: '12VDC SMPS ', uom: 'Nos.', stock: 4, prefix: '12V-SMPS-', start_num: 101, num_len: 3, pattern_display: '12V-SMPS-101 to 12V-SMPS-104' },
-      { id: 41, name: '24VDC SMPS ', uom: 'Nos.', stock: 10, prefix: '24V-SMPS-', start_num: 101, num_len: 3, pattern_display: '24V-SMPS-101 to 24V-SMPS-110' },
+      { id: 38, name: "Signal Light Post (9')", uom: 'Nos.', stock: 3, prefix: 'LIGHT-POLE-', start_num: 101, num_len: 3, pattern_display: 'LIGHT-POLE-101 to LIGHT-POLE-103' },
+      { id: 39, name: "Sensor Post (6')", uom: 'Nos.', stock: 0, prefix: 'SENSOR-POLE-', start_num: 101, num_len: 3, pattern_display: 'SENSOR-POLE-101' },
+      { id: 40, name: 'SMPS 12VDC', uom: 'Nos.', stock: 4, prefix: '12V-SMPS-', start_num: 101, num_len: 3, pattern_display: '12V-SMPS-101 to 12V-SMPS-104' },
+      { id: 41, name: 'SMPS 24VDC', uom: 'Nos.', stock: 10, prefix: '24V-SMPS-', start_num: 101, num_len: 3, pattern_display: '24V-SMPS-101 to 24V-SMPS-110' },
       { id: 42, name: 'Solar Panel with Mounting', uom: 'Nos.', stock: 12, prefix: 'SOLAR-PANEL-MOUNT-', start_num: 101, num_len: 3, pattern_display: 'SOLAR-PANEL-MOUNT-101 to SOLAR-PANEL-MOUNT-112' },
-      { id: 43, name: '24V STOP Light', uom: 'Nos.', stock: 3, prefix: 'STOP LIGHT-24V-', start_num: 101, num_len: 3, pattern_display: 'STOP LIGHT-24V-101 to STOP LIGHT-24V-103' },
+      { id: 43, name: 'STOP Light 24V', uom: 'Nos.', stock: 3, prefix: 'STOP LIGHT-24V-', start_num: 101, num_len: 3, pattern_display: 'STOP LIGHT-24V-101 to STOP LIGHT-24V-103' },
       { id: 44, name: 'BURIED ZEBRA LIGHT', uom: 'Nos.', stock: 2, prefix: 'BURIED-ZEBRA-LIGHT-', start_num: 101, num_len: 3, pattern_display: 'BURIED-ZEBRA-LIGHT-101 to BURIED-ZEBRA-LIGHT-102' },
       { id: 45, name: 'LED PEDESTRIAN LIGHT', uom: 'Nos.', stock: 1, prefix: 'PEDESTRIAN-LIGHT-', start_num: 101, num_len: 3, pattern_display: 'PEDESTRIAN-LIGHT-101' },
       { id: 46, name: 'PANEL LED INDICATOR', uom: 'Nos.', stock: 18, prefix: 'PANEL-INDICATOR-', start_num: 101, num_len: 3, pattern_display: 'PANEL-INDICATOR-101 to PANEL-INDICATOR-118' },
@@ -453,6 +503,7 @@
     let liveInventory = [];
     let liveRequisitions = [];
     let liveInwardLogs = [];
+    let currentBasket = []; // Multi-Item Requisition Cart
 
     window.onload = function() {
       document.getElementById('userDisplay').innerText = `${currentUser} (${userRole.toUpperCase()})`;
@@ -511,10 +562,10 @@
     function listenInventory() {
       db.collection("signal_inventory").orderBy("id").onSnapshot(snapshot => {
         liveInventory = [];
-        const selectReq = document.getElementById('reqMaterial');
+        const selectItem = document.getElementById('itemSelect');
         const selectInward = document.getElementById('inwardMaterial');
 
-        selectReq.innerHTML = '<option value="">-- Choose Stock Item --</option>';
+        selectItem.innerHTML = '<option value="">-- Choose Stock Item --</option>';
         selectInward.innerHTML = '<option value="">-- Choose Stock Item --</option>';
 
         snapshot.forEach(doc => {
@@ -522,7 +573,7 @@
           liveInventory.push(data);
 
           if (data.stock > 0) {
-            selectReq.innerHTML += `<option value="${data.id}">${data.name} (Stock: ${data.stock} ${data.uom})</option>`;
+            selectItem.innerHTML += `<option value="${data.id}">${data.name} (Stock: ${data.stock} ${data.uom})</option>`;
           }
           selectInward.innerHTML += `<option value="${data.id}">${data.name} (Current: ${data.stock} ${data.uom})</option>`;
         });
@@ -571,70 +622,213 @@
       renderStockTable(filtered);
     }
 
+    // -------------------------------------------------------------
+    // MULTI-ITEM BASKET ENGINE
+    // -------------------------------------------------------------
     function onMaterialSelected(itemId) {
-      const serialSelect = document.getElementById('reqSerial');
-      serialSelect.innerHTML = '<option value="">-- Select Available Serial --</option>';
+      const container = document.getElementById('serialPickerContainer');
+      container.innerHTML = "";
       if (!itemId) return;
 
       const item = liveInventory.find(i => i.id == itemId);
-      if (item && item.availableSerials && item.availableSerials.length > 0) {
-        item.availableSerials.forEach(sn => {
-          serialSelect.innerHTML += `<option value="${sn}">${sn}</option>`;
+      const qty = parseInt(document.getElementById('itemQty').value) || 1;
+      buildSerialSelectors(item, qty);
+    }
+
+    function onQuantityChanged(qtyVal) {
+      const itemId = document.getElementById('itemSelect').value;
+      if (!itemId) return;
+      const item = liveInventory.find(i => i.id == itemId);
+      buildSerialSelectors(item, parseInt(qtyVal) || 1);
+    }
+
+    function buildSerialSelectors(item, qty) {
+      const container = document.getElementById('serialPickerContainer');
+      container.innerHTML = "";
+
+      if (!item || !item.availableSerials || item.availableSerials.length === 0) {
+        container.innerHTML = `<input type="text" class="basket-serial-input" value="Standard Unmarked" readonly style="background:#eceff1;">`;
+        return;
+      }
+
+      for (let q = 1; q <= qty; q++) {
+        let selectHtml = `<select class="basket-serial-select" style="margin-bottom:4px;" required>`;
+        selectHtml += `<option value="">-- Select Serial #${q} --</option>`;
+        item.availableSerials.forEach((sn, idx) => {
+          // Auto pre-select sequential serials if available
+          let isSelected = (idx === (q - 1)) ? 'selected' : '';
+          selectHtml += `<option value="${sn}" ${isSelected}>${sn}</option>`;
         });
-      } else {
-        serialSelect.innerHTML += `<option value="UNMARKED">Standard Issue</option>`;
+        selectHtml += `</select>`;
+        container.insertAdjacentHTML('beforeend', selectHtml);
       }
     }
 
-    // 1. SUPERVISOR SUBMITS REQUISITION -> SENDS WHATSAPP TO ADMIN
-    document.getElementById('requisitionForm').addEventListener('submit', async function(e) {
-      e.preventDefault();
-      const btn = document.getElementById('reqSubmitBtn');
-      btn.innerText = "Submitting Requisition...";
-      btn.disabled = true;
+    function addItemToBasket() {
+      const itemId = document.getElementById('itemSelect').value;
+      if (!itemId) {
+        alert("Please select a material first.");
+        return;
+      }
 
-      const itemId = document.getElementById('reqMaterial').value;
       const item = liveInventory.find(i => i.id == itemId);
-      const chosenSerial = document.getElementById('reqSerial').value;
+      const qty = parseInt(document.getElementById('itemQty').value) || 1;
+      const faultyDesc = document.getElementById('itemFaultyDesc').value.trim();
+      const faultySerial = document.getElementById('itemFaultySerial').value.trim() || "Unmarked";
 
-      const reqData = {
+      if (!faultyDesc) {
+        alert("Please describe the faulty/defective item being replaced.");
+        document.getElementById('itemFaultyDesc').focus();
+        return;
+      }
+
+      if (qty > item.stock) {
+        alert(`Requested quantity (${qty}) exceeds available stock (${item.stock})!`);
+        return;
+      }
+
+      // Collect chosen serials
+      let chosenSerials = [];
+      const serialSelects = document.querySelectorAll('.basket-serial-select');
+      if (serialSelects.length > 0) {
+        serialSelects.forEach(sel => {
+          if (sel.value) chosenSerials.push(sel.value);
+        });
+      } else {
+        chosenSerials.push("Standard Issue");
+      }
+
+      if (chosenSerials.length < qty) {
+        alert("Please select all serial numbers for the chosen quantity.");
+        return;
+      }
+
+      // Check duplicate serials selected in same item
+      const uniqueSerials = new Set(chosenSerials);
+      if (uniqueSerials.size !== chosenSerials.length) {
+        alert("Duplicate serial numbers selected for the same item! Please choose different serials.");
+        return;
+      }
+
+      currentBasket.push({
         itemId: parseInt(itemId),
         materialName: item.name,
         uom: item.uom,
-        quantity: 1,
-        issuedSerial: chosenSerial,
-        dateOfIssue: document.getElementById('reqDate').value,
-        location: document.getElementById('reqLocation').value.trim(),
-        locationSide: document.getElementById('reqSide').value,
-        faultyItemName: document.getElementById('faultyName').value.trim(),
-        faultyItemSerial: document.getElementById('faultySerial').value.trim() || "Unmarked",
-        remarks: document.getElementById('reqRemarks').value.trim(),
+        quantity: qty,
+        serials: chosenSerials,
+        faultyItemName: faultyDesc,
+        faultyItemSerial: faultySerial
+      });
+
+      renderBasketTable();
+
+      // Reset item inputs
+      document.getElementById('itemSelect').value = "";
+      document.getElementById('itemQty').value = "1";
+      document.getElementById('serialPickerContainer').innerHTML = "";
+      document.getElementById('itemFaultyDesc').value = "";
+      document.getElementById('itemFaultySerial').value = "";
+    }
+
+    function removeBasketItem(index) {
+      currentBasket.splice(index, 1);
+      renderBasketTable();
+    }
+
+    function renderBasketTable() {
+      const tbody = document.getElementById('basketTableBody');
+      tbody.innerHTML = "";
+
+      if (currentBasket.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:15px; color:#888;">Basket is empty. Select material and click "+ Add Item to Basket".</td></tr>`;
+        return;
+      }
+
+      currentBasket.forEach((b, idx) => {
+        const row = `
+          <tr>
+            <td><strong>${idx + 1}</strong></td>
+            <td><strong>${b.materialName}</strong></td>
+            <td><span class="status-badge badge-ok">${b.quantity} ${b.uom}</span></td>
+            <td><small style="color:#1a237e; font-weight:bold;">${b.serials.join(', ')}</small></td>
+            <td>${b.faultyItemName}</td>
+            <td><small style="color:#c62828;">${b.faultyItemSerial}</small></td>
+            <td style="text-align:center;">
+              <button type="button" onclick="removeBasketItem(${idx})" class="btn-action btn-delete" style="font-size:11px; padding:3px 6px;">❌ Remove</button>
+            </td>
+          </tr>
+        `;
+        tbody.insertAdjacentHTML('beforeend', row);
+      });
+    }
+
+    // SUBMIT COMPLETE MULTI-ITEM REQUISITION BASKET
+    async function submitCompleteRequisitionBasket() {
+      if (currentBasket.length === 0) {
+        alert("Requisition basket is empty! Please add at least one material to the basket.");
+        return;
+      }
+
+      const dutyDate = document.getElementById('reqDate').value;
+      const location = document.getElementById('reqLocation').value.trim();
+      const locationSide = document.getElementById('reqSide').value;
+      const remarks = document.getElementById('reqRemarks').value.trim() || "Multi-item site replacement";
+
+      if (!location) {
+        alert("Please enter the Target Location / Gate.");
+        document.getElementById('reqLocation').focus();
+        return;
+      }
+
+      const btn = document.getElementById('reqSubmitBtn');
+      btn.innerText = "Broadcasting Multi-Item Requisition...";
+      btn.disabled = true;
+
+      const requisitionRecord = {
+        dateOfIssue: dutyDate,
+        location: location,
+        locationSide: locationSide,
+        generalRemarks: remarks,
+        totalItemsCount: currentBasket.reduce((sum, item) => sum + item.quantity, 0),
+        itemsList: currentBasket,
         status: "PENDING_ADMIN_REVIEW",
         requestedBy: currentUser,
         createdAt: new Date().toISOString()
       };
 
       try {
-        await db.collection("signal_requisitions").add(reqData);
-        alert("✅ Requisition submitted! Opening WhatsApp to notify Admin...");
+        await db.collection("signal_requisitions").add(requisitionRecord);
+        alert(`✅ Multi-Item Requisition broadcasted successfully (${currentBasket.length} item categories)!\nSending WhatsApp notification to Admin...`);
 
-        sendWhatsAppToAdmin(reqData);
+        sendMultiItemWhatsAppToAdmin(requisitionRecord);
 
-        document.getElementById('requisitionForm').reset();
-        btn.innerText = "Submit Requisition & Send WhatsApp Alert to Admin";
+        // Reset Form
+        currentBasket = [];
+        renderBasketTable();
+        document.getElementById('reqLocation').value = "";
+        document.getElementById('reqRemarks').value = "";
+        btn.innerText = "Submit Complete Requisition & Send WhatsApp Alert to Admin";
         btn.disabled = false;
       } catch (err) {
-        alert("Error: " + err.message);
+        alert("Error saving requisition: " + err.message);
+        btn.innerText = "Submit Complete Requisition & Send WhatsApp Alert to Admin";
         btn.disabled = false;
       }
-    });
+    }
 
-    function sendWhatsAppToAdmin(req) {
-      const msg = encodeURIComponent(`🚨 *NEW MATERIAL REQUISITION RAISED*\n\n*Material:* ${req.materialName}\n*Assigned Serial:* ${req.issuedSerial}\n*Location:* ${req.location} (${req.locationSide})\n*Faulty Unit:* ${req.faultyItemName} (SN: ${req.faultyItemSerial})\n*Reason:* ${req.remarks}\n*Raised By:* ${req.requestedBy}\n\n_Please verify and forward to Tata Steel Client for final approval._`);
+    function sendMultiItemWhatsAppToAdmin(req) {
+      let itemsSummaryText = "";
+      req.itemsList.forEach((it, i) => {
+        itemsSummaryText += `\n${i + 1}. *${it.materialName}* (${it.quantity} ${it.uom})\n   - *Serials:* ${it.serials.join(', ')}\n   - *Replacing:* ${it.faultyItemName} (Old SN: ${it.faultyItemSerial})`;
+      });
+
+      const msg = encodeURIComponent(`🚨 *NEW MULTI-ITEM REQUISITION RAISED*\n\n*Location:* ${req.location} (${req.locationSide})\n*Date:* ${req.dateOfIssue}\n*Total Materials Requested:* ${req.totalItemsCount}\n\n*Items List:*${itemsSummaryText}\n\n*Remarks:* ${req.generalRemarks}\n*Raised By:* ${req.requestedBy}\n\n_Please verify and forward to Tata Steel Client for final release approval._`);
       window.open(`https://api.whatsapp.com/send?phone=${ADMIN_WHATSAPP_NUMBER}&text=${msg}`, '_blank');
     }
 
-    // 2. LISTEN REQUISITIONS & 3-TIER HIERARCHY WORKFLOW
+    // -------------------------------------------------------------
+    // LISTEN REQUISITIONS & 3-TIER APPROVAL FOR MULTI-ITEM BATCHES
+    // -------------------------------------------------------------
     function listenRequisitions() {
       db.collection("signal_requisitions").orderBy("createdAt", "desc").onSnapshot(snapshot => {
         liveRequisitions = [];
@@ -646,7 +840,7 @@
         defectiveBody.innerHTML = "";
 
         if (snapshot.empty) {
-          tableBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No requisition entries recorded.</td></tr>`;
+          tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:#888;">No requisition entries recorded.</td></tr>`;
           defectiveBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:20px; color:#888;">No defective items returned yet.</td></tr>`;
           return;
         }
@@ -674,7 +868,7 @@
             statusBadge = `<span class="stock-badge-pending-client">👑 Pending Tata Steel Approval</span>`;
             if (isClient) {
               pendingActionCount++;
-              actionBtn = `<button onclick="clientApproveRequisition('${data.docId}', ${data.itemId}, '${data.issuedSerial}')" class="submit-btn" style="background:#2e7d32; margin:0; padding:6px 10px; font-size:11px;">👑 Approve & Release</button>`;
+              actionBtn = `<button onclick="clientApproveMultiItemRequisition('${data.docId}')" class="submit-btn" style="background:#2e7d32; margin:0; padding:6px 10px; font-size:11px;">👑 Approve & Release All</button>`;
             } else if (isAdmin) {
               actionBtn = `<span style="color:#0288d1; font-size:11px; font-weight:bold;">Forwarded to Client</span>`;
             } else {
@@ -685,14 +879,28 @@
             actionBtn = `<small style="color:#2e7d32; font-weight:bold;">Issued to Site</small>`;
           }
 
+          // Format items list breakdown
+          let itemsListHtml = "<ul style='margin:0; padding-left:15px; font-size:12px;'>";
+          if (data.itemsList && Array.isArray(data.itemsList)) {
+            data.itemsList.forEach(it => {
+              itemsListHtml += `<li><strong>${it.materialName}</strong> (Qty: ${it.quantity})<br><small style="color:#1a237e;">SN: ${(it.serials || []).join(', ')}</small></li>`;
+            });
+          } else {
+            // Legacy single item format support
+            itemsListHtml += `<li><strong>${data.materialName || 'Item'}</strong> (SN: ${data.issuedSerial || '--'})</li>`;
+          }
+          itemsListHtml += "</ul>";
+
           const row = `
             <tr>
               <td><strong>${reqIndex++}</strong></td>
-              <td><strong>${data.materialName}</strong></td>
-              <td><span style="background:#e8eaf6; padding:3px 6px; border-radius:4px; font-weight:bold;">${data.issuedSerial}</span></td>
+              <td>
+                <span class="status-badge badge-ok">${data.totalItemsCount || (data.itemsList?.length || 1)} Items</span><br>
+                <small style="color:#546e7a;">${data.generalRemarks || data.remarks || 'None'}</small>
+              </td>
+              <td>${itemsListHtml}</td>
               <td>${data.dateOfIssue}</td>
-              <td>${data.location}<br><small style="color:#546e7a;">(${data.locationSide})</small></td>
-              <td>${data.faultyItemName}<br><small style="color:#c62828;">SN: ${data.faultyItemSerial}</small></td>
+              <td><strong>${data.location}</strong><br><small style="color:#546e7a;">(${data.locationSide})</small></td>
               <td><small>${data.requestedBy}</small></td>
               <td>${statusBadge}</td>
               <td>${actionBtn}</td>
@@ -700,21 +908,26 @@
           `;
           tableBody.insertAdjacentHTML('beforeend', row);
 
+          // Populate Defective Ledger if approved
           if (data.status === "APPROVED") {
-            const defRow = `
-              <tr>
-                <td>${defIndex++}</td>
-                <td>${data.dateOfIssue}</td>
-                <td><strong>${data.faultyItemName}</strong></td>
-                <td><span style="color:#c62828; font-weight:bold;">${data.faultyItemSerial}</span></td>
-                <td>${data.location}</td>
-                <td>${data.locationSide}</td>
-                <td>${data.materialName} (${data.issuedSerial})</td>
-                <td><small style="color:#2e7d32;">Tata Steel</small></td>
-                <td><small>${data.requestedBy}</small></td>
-              </tr>
-            `;
-            defectiveBody.insertAdjacentHTML('beforeend', defRow);
+            if (data.itemsList && Array.isArray(data.itemsList)) {
+              data.itemsList.forEach(it => {
+                const defRow = `
+                  <tr>
+                    <td>${defIndex++}</td>
+                    <td>${data.dateOfIssue}</td>
+                    <td><strong>${it.faultyItemName}</strong></td>
+                    <td><span style="color:#c62828; font-weight:bold;">${it.faultyItemSerial}</span></td>
+                    <td>${data.location}</td>
+                    <td>${data.locationSide}</td>
+                    <td>${it.materialName} (${it.serials?.join(', ')})</td>
+                    <td><small style="color:#2e7d32;">Tata Steel Client</small></td>
+                    <td><small>${data.requestedBy}</small></td>
+                  </tr>
+                `;
+                defectiveBody.insertAdjacentHTML('beforeend', defRow);
+              });
+            }
           }
         });
 
@@ -728,10 +941,10 @@
       });
     }
 
-    // 3. ADMIN FORWARDS TO TATA STEEL CLIENT -> SENDS WHATSAPP TO MATERIAL GROUP
+    // FORWARD MULTI-ITEM TO CLIENT
     async function forwardToClient(reqDocId) {
       const rec = liveRequisitions.find(r => r.docId === reqDocId);
-      if (!confirm("Forward this requisition to Tata Steel Client for final approval?")) return;
+      if (!confirm("Forward this multi-item requisition to Tata Steel Client for final approval?")) return;
 
       try {
         await db.collection("signal_requisitions").doc(reqDocId).update({
@@ -740,7 +953,12 @@
           forwardedAt: new Date().toISOString()
         });
 
-        const msg = encodeURIComponent(`👑 *TATA STEEL APPROVAL REQUIRED - MATERIAL REQUISITION*\n\n*Material:* ${rec.materialName}\n*Serial to Release:* ${rec.issuedSerial}\n*Location:* ${rec.location} (${rec.locationSide})\n*Defective Item Replacing:* ${rec.faultyItemName}\n*Verification:* Verified by Admin (${currentUser})\n\n_Tata Steel authority please login and approve release in portal._`);
+        let itemsSummary = "";
+        (rec.itemsList || []).forEach((it, i) => {
+          itemsSummary += `\n${i + 1}. *${it.materialName}* (Qty: ${it.quantity}, SN: ${it.serials.join(', ')})`;
+        });
+
+        const msg = encodeURIComponent(`👑 *TATA STEEL APPROVAL REQUIRED - MULTI-ITEM REQUISITION*\n\n*Location:* ${rec.location} (${rec.locationSide})\n*Materials to Release:*${itemsSummary}\n\n*Verified by:* Admin (${currentUser})\n\n_Tata Steel authority please login and approve release in portal._`);
         window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
 
         alert("✅ Requisition forwarded and notification broadcasted to Client Group!");
@@ -749,28 +967,31 @@
       }
     }
 
-    // 4. TATA STEEL CLIENT FINAL APPROVAL & SERIAL DEDUCTION
-    async function clientApproveRequisition(reqDocId, itemId, issuedSerial) {
-      if (!confirm(`[Tata Steel Client Authority]\nConfirm approval to release serial ${issuedSerial} and deduct 1 unit from store balance?`)) return;
+    // CLIENT FINAL APPROVAL FOR MULTI-ITEMS (DEDUCTS ALL STOCKS & SERIALS IN ONE BATCH)
+    async function clientApproveMultiItemRequisition(reqDocId) {
+      const rec = liveRequisitions.find(r => r.docId === reqDocId);
+      if (!rec) return;
+
+      if (!confirm(`[Tata Steel Client Authority]\nConfirm approval to release all ${rec.itemsList?.length || 1} material types and deduct them from store balance?`)) return;
 
       try {
-        const itemRef = db.collection("signal_inventory").doc(itemId.toString());
-        const itemSnap = await itemRef.get();
-        const currentData = itemSnap.data();
-
-        if (!itemSnap.exists || currentData.stock <= 0) {
-          alert("❌ Error: Balance stock is 0!");
-          return;
-        }
-
-        const updatedStock = currentData.stock - 1;
-        const updatedSerials = (currentData.availableSerials || []).filter(sn => sn !== issuedSerial);
-
         const batch = db.batch();
-        batch.update(itemRef, {
-          stock: updatedStock,
-          availableSerials: updatedSerials
-        });
+
+        for (let itemReq of (rec.itemsList || [])) {
+          const itemRef = db.collection("signal_inventory").doc(itemReq.itemId.toString());
+          const itemSnap = await itemRef.get();
+          
+          if (itemSnap.exists) {
+            const currentData = itemSnap.data();
+            const newStock = Math.max(0, currentData.stock - itemReq.quantity);
+            const remainingSerials = (currentData.availableSerials || []).filter(sn => !itemReq.serials.includes(sn));
+            
+            batch.update(itemRef, {
+              stock: newStock,
+              availableSerials: remainingSerials
+            });
+          }
+        }
 
         const reqRef = db.collection("signal_requisitions").doc(reqDocId);
         batch.update(reqRef, {
@@ -780,13 +1001,13 @@
         });
 
         await batch.commit();
-        alert(`✅ Material Approved & Released by Tata Steel!\nSerial ${issuedSerial} deducted. Current balance: ${updatedStock}.`);
+        alert(`✅ All items Approved & Released by Tata Steel!\nInventory stocks and serial numbers successfully updated.`);
       } catch (err) {
         alert("Approval failed: " + err.message);
       }
     }
 
-    // 5. VENDOR INWARD AUTO SERIAL INCREMENT PREVIEW
+    // VENDOR INWARD AUTO SERIAL INCREMENT PREVIEW
     function calculateInwardSerialPreview() {
       const itemId = document.getElementById('inwardMaterial').value;
       const qty = parseInt(document.getElementById('inwardQty').value) || 1;
@@ -918,43 +1139,34 @@
         return;
       }
 
-      const exportData = liveRequisitions.map((r, i) => ({
-        "Sl No.": i + 1,
-        "Material Name": r.materialName,
-        "Issued Serial #": r.issuedSerial,
-        "Date of Issue": r.dateOfIssue,
-        "Target Location": r.location,
-        "Location Side": r.locationSide,
-        "Faulty Item Replaced": r.faultyItemName,
-        "Faulty Serial #": r.faultyItemSerial,
-        "Requested By Supervisor": r.requestedBy,
-        "Approval Status": r.status,
-        "Approved By Authority": r.approvedBy || "Pending",
-        "Reason / Remarks": r.remarks,
-        "Submission Timestamp": r.createdAt
-      }));
+      let exportData = [];
+
+      liveRequisitions.forEach(r => {
+        if (r.itemsList && Array.isArray(r.itemsList)) {
+          r.itemsList.forEach(it => {
+            exportData.push({
+              "Sl No.": exportData.length + 1,
+              "Requisition Date": r.dateOfIssue,
+              "Target Location": r.location,
+              "Location Side": r.locationSide,
+              "Material Issued": it.materialName,
+              "Quantity Issued": it.quantity,
+              "Serials Issued": (it.serials || []).join(', '),
+              "Faulty Item Replaced": it.faultyItemName,
+              "Faulty Serial": it.faultyItemSerial,
+              "Approval Status": r.status,
+              "Approved Authority": r.approvedBy || "Pending",
+              "Requested By": r.requestedBy,
+              "General Remarks": r.generalRemarks || ""
+            });
+          });
+        }
+      });
 
       const ws = XLSX.utils.json_to_sheet(exportData);
-      
-      ws['!cols'] = [
-        { wch: 8 },  // Sl No
-        { wch: 35 }, // Material
-        { wch: 20 }, // Serial
-        { wch: 14 }, // Date
-        { wch: 18 }, // Location
-        { wch: 15 }, // Side
-        { wch: 25 }, // Faulty Item
-        { wch: 18 }, // Faulty Serial
-        { wch: 25 }, // Requested By
-        { wch: 25 }, // Status
-        { wch: 22 }, // Approved By
-        { wch: 30 }, // Remarks
-        { wch: 24 }  // Timestamp
-      ];
-
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Requisition_Logs");
-      XLSX.writeFile(wb, `Tata_Steel_Issued_Requisitions_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, "Requisitions_Breakdown");
+      XLSX.writeFile(wb, `Tata_Steel_Multi_Item_Requisitions_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function exportStockExcel() {
@@ -974,17 +1186,25 @@
 
     function exportDefectiveExcel() {
       const approvedRequisitions = liveRequisitions.filter(r => r.status === "APPROVED");
-      const exportData = approvedRequisitions.map((r, i) => ({
-        "Sl No": i + 1,
-        "Date Replaced": r.dateOfIssue,
-        "Faulty Item Name": r.faultyItemName,
-        "Faulty Serial #": r.faultyItemSerial,
-        "Removed From Location": r.location,
-        "Position / Side": r.locationSide,
-        "Replacement Unit Issued": `${r.materialName} (${r.issuedSerial})`,
-        "Approved By Authority": "Tata Steel Client",
-        "Replaced By": r.requestedBy
-      }));
+      let exportData = [];
+
+      approvedRequisitions.forEach(r => {
+        if (r.itemsList && Array.isArray(r.itemsList)) {
+          r.itemsList.forEach(it => {
+            exportData.push({
+              "Sl No": exportData.length + 1,
+              "Date Replaced": r.dateOfIssue,
+              "Faulty Item Name": it.faultyItemName,
+              "Faulty Serial #": it.faultyItemSerial,
+              "Removed From Location": r.location,
+              "Position / Side": r.locationSide,
+              "Replacement Unit Issued": `${it.materialName} (${(it.serials || []).join(', ')})`,
+              "Approved By Authority": "Tata Steel Client",
+              "Replaced By": r.requestedBy
+            });
+          });
+        }
+      });
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
